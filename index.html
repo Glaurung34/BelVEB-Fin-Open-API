@@ -1,0 +1,465 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>БелВЭБ Open API</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: portal shell — top bar, API switcher, sub-tabs; docs as sidebar index + endpoint cards */
+:root{
+  --bg:#f5f7fa; --surface:#ffffff; --ink:#0f1e33; --muted:#5a6a80; --line:#dde3ec;
+  --accent:#0a5bd3; --accent-soft:#e6efff; --accent-ink:#ffffff;
+  --get:#0f7a55; --get-bg:#e2f5ec; --post:#0a5bd3; --post-bg:#e6efff; --del:#b4332b; --del-bg:#fbe7e5;
+  --ok:#0f7a55; --ok-bg:#e2f5ec; --warn:#9a5b00; --warn-bg:#fff2d9; --none:#5a6a80; --none-bg:#edf0f4;
+  --code-bg:#0f1e33; --code-fg:#dbe6f7;
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1422; --surface:#111d30; --ink:#e7eef9; --muted:#9aabc3; --line:#22324a;
+  --accent:#5b9bff; --accent-soft:#16294a; --accent-ink:#06111f;
+  --get:#4fd1a0; --get-bg:#0f2e25; --post:#7fb0ff; --post-bg:#15284a; --del:#ff8a80; --del-bg:#3a1a19;
+  --ok:#4fd1a0; --ok-bg:#0f2e25; --warn:#ffc266; --warn-bg:#3a2a0e; --none:#9aabc3; --none-bg:#1a2840;
+  --code-bg:#060d18; --code-fg:#dbe6f7; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b1422; --surface:#111d30; --ink:#e7eef9; --muted:#9aabc3; --line:#22324a;
+  --accent:#5b9bff; --accent-soft:#16294a; --accent-ink:#06111f;
+  --get:#4fd1a0; --get-bg:#0f2e25; --post:#7fb0ff; --post-bg:#15284a; --del:#ff8a80; --del-bg:#3a1a19;
+  --ok:#4fd1a0; --ok-bg:#0f2e25; --warn:#ffc266; --warn-bg:#3a2a0e; --none:#9aabc3; --none-bg:#1a2840;
+  --code-bg:#060d18; --code-fg:#dbe6f7; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
+a{color:var(--accent)}
+code,.mono{font-family:var(--f-mono);font-size:.86em}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px}
+header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+header.top .wrap{display:flex;align-items:center;gap:24px;flex-wrap:wrap;padding-block:12px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:.01em;color:var(--ink);text-decoration:none;display:flex;align-items:center;gap:10px}
+.brand i{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:7px;background:var(--accent);color:var(--accent-ink);font-style:normal;font-size:12px}
+.brand small{font-family:var(--f-body);font-weight:500;color:var(--muted);font-size:13px}
+nav.main{display:flex;gap:18px;flex-wrap:wrap;margin-left:auto;font-size:14px}
+nav.main span{color:var(--muted)}
+.apibar{display:flex;gap:8px;flex-wrap:wrap;padding-block:22px 0}
+.apibar button{font:600 15px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 18px;border-radius:999px;cursor:pointer}
+.apibar button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.apibar .ver{align-self:center;color:var(--muted);font-size:13px;margin-left:6px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,4vw,40px);line-height:1.15;margin:18px 0 6px;text-wrap:balance}
+.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:18px;overflow-x:auto}
+.subtabs button{font:600 15px var(--f-body);background:none;border:0;border-bottom:3px solid transparent;padding:12px 16px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.subtabs button[aria-selected="true"]{color:var(--ink);border-color:var(--accent)}
+button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{padding-block:28px 64px}
+.lead{font-size:17px;max-width:68ch;color:var(--muted)}
+h2{font-family:var(--f-display);font-weight:500;font-size:22px;margin:40px 0 16px;text-wrap:balance}
+h3{font-size:17px;margin:0 0 6px}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;min-width:0}
+.tile p{margin:0;color:var(--muted);font-size:14px}
+.tile .k{font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;display:block}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0;counter-reset:s;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.steps li{list-style:none;padding:20px;border-right:1px solid var(--line);counter-increment:s;min-width:0}
+.steps li:last-child{border-right:0}
+.steps li::before{content:counter(s);font-family:var(--f-display);font-size:28px;color:var(--accent);display:block;margin-bottom:8px}
+.steps p{margin:0;font-size:14px;color:var(--muted)}
+ol.steps{padding:0;margin:0}
+/* guides */
+.flow{display:grid;gap:14px}
+.fstep{display:grid;grid-template-columns:44px 1fr;gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.fstep .n{font-family:var(--f-display);font-size:22px;color:var(--accent)}
+.fstep p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.fstep .call{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:8px;font:500 13px var(--f-mono);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 10px;max-width:100%;overflow-wrap:anywhere}
+/* docs */
+.docs{display:grid;grid-template-columns:250px minmax(0,1fr);gap:32px;align-items:start}
+.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px);max-height:calc(100vh - 100px);overflow:auto;font-size:14px;border-right:1px solid var(--line);padding-right:16px}
+.toc b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 6px}
+.toc a{display:block;color:var(--ink);text-decoration:none;padding:3px 0}
+.toc a:hover{color:var(--accent)}
+@media (max-width:860px){.docs{grid-template-columns:1fr}.toc{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding:0 0 12px}}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px;min-width:0}
+.box h3{margin-bottom:10px}
+.kv{display:grid;grid-template-columns:minmax(120px,200px) 1fr;gap:6px 16px;font-size:14px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td code{white-space:nowrap}
+.group{margin-top:34px}
+.group > h2{margin-top:0}
+.group > p{color:var(--muted);margin:-8px 0 14px;max-width:72ch}
+details.ep{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;min-width:0}
+details.ep[open]{border-color:var(--accent)}
+details.ep summary{list-style:none;display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 16px;cursor:pointer}
+details.ep summary::-webkit-details-marker{display:none}
+.m{font:600 12px var(--f-mono);text-align:center;border-radius:5px;padding:4px 0;letter-spacing:.04em}
+.m.GET{background:var(--get-bg);color:var(--get)}
+.m.POST{background:var(--post-bg);color:var(--post)}
+.m.DELETE{background:var(--del-bg);color:var(--del)}
+.path{font:500 14px var(--f-mono);overflow-wrap:anywhere}
+.sum{display:block;font:400 13px var(--f-body);color:var(--muted);margin-top:2px}
+.st{font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.st.ok{background:var(--ok-bg);color:var(--ok)}
+.st.warn{background:var(--warn-bg);color:var(--warn)}
+.st.none{background:var(--none-bg);color:var(--none)}
+@media (max-width:560px){details.ep summary{grid-template-columns:64px minmax(0,1fr)}details.ep summary .st{grid-column:2;justify-self:start}}
+.epb{border-top:1px solid var(--line);padding:16px;display:grid;gap:16px}
+.epb h4{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.req{font-family:var(--f-mono);font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.req span{overflow-wrap:anywhere;min-width:0}
+.copy{font:500 12px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:5px;padding:3px 10px;cursor:pointer}
+pre{background:var(--code-bg);color:var(--code-fg);border-radius:8px;padding:14px 16px;overflow-x:auto;font:400 12.5px/1.6 var(--f-mono);margin:0}
+.note{font-size:13px;color:var(--muted)}
+.pill{font:500 12px var(--f-mono);background:var(--accent-soft);color:var(--accent);border-radius:4px;padding:1px 6px;margin:0 4px 4px 0;display:inline-block}
+footer{border-top:1px solid var(--line);color:var(--muted);font-size:13px;padding-block:20px}
+@media (prefers-reduced-motion:no-preference){details.ep summary{transition:background .15s}details.ep summary:hover{background:var(--bg)}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#accounts-review"><i>OB</i>БелВЭБ Open API <small>Developer Hub</small></a>
+    <nav class="main" aria-label="Разделы портала"><span>Главная</span><span>API-каталог</span><span>Поддержка</span><span>Как это работает</span></nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="apibar" role="group" aria-label="Выбор API">
+    <button type="button" id="api-accounts" data-api="accounts">Счета</button>
+    <button type="button" id="api-payments" data-api="payments">Платежи</button>
+    <span class="ver" id="ver"></span>
+  </div>
+  <h1 id="apiTitle"></h1>
+  <p class="lead" id="apiLead"></p>
+  <div class="subtabs" role="tablist" aria-label="Разделы API">
+    <button type="button" role="tab" id="tab-review" data-tab="review">Обзор</button>
+    <button type="button" role="tab" id="tab-guides" data-tab="guides">Гайды</button>
+    <button type="button" role="tab" id="tab-doc" data-tab="doc">Документация</button>
+  </div>
+</div>
+
+<main class="wrap" id="view"></main>
+
+<footer><div class="wrap">Описание составлено по СПР 6.02-1-2022 «Открытые банковские API» и внутреннему описанию «Сервис счетов» (ред. 19.08.2026). Статусы реализации указаны на дату ревизии.</div></footer>
+
+<script>
+const BASE = "https://dev-open-banking-accounts-api-new-wso2.lab.vebtech.by";
+const H = {
+  auth:["Authorization","Bearer &lt;access_token&gt; — токен Пользователя API из WSO2","Да"],
+  iid:["x-fapi-interaction-id","RFC4122 UID, идентификатор корреляции","Да"],
+  idem:["x-idempotency-key","Уникальный ключ запроса для идемпотентности","Да"],
+  ct:["Content-Type","application/json","Да"],
+  adate:["x-fapi-auth-date","Время последнего входа клиента через TPP (RFC7231)","Нет"],
+  ip:["x-fapi-customer-ip-address","IP-адрес клиента, если он вошёл через TPP","Нет"],
+  ua:["x-customer-user-agent","Тип устройства клиента","Нет"],
+  consent:["x-consent-id","Идентификатор согласия, в рамках которого выполняется запрос","Да"]
+};
+const ST = {ok:["ok","Готово"], uos:["warn","Нет точки в УОС"], spr:["none","По СПР"]};
+
+const consentResp = `{
+  "data": {
+    "accountConsentId": "bf571366-248b-482d-88f4-2d429a1d858c",
+    "link": "${BASE}/accountConsents/bf571366-…",
+    "status": "AwaitingAuthorisation",
+    "statusUpdateDateTimeConsent": "2024-05-29T14:03:48+03:00",
+    "creationDateTime": "2024-05-29T11:03:48+03:00",
+    "permissions": ["ReadAccountsBasic", "ReadBalances"],
+    "expirationDate": "2027-05-29",
+    "transactionFromDate": "2024-01-01",
+    "transactionToDate": "2024-05-29"
+  }
+}`;
+
+const ACC = {
+  title:"Счета", ver:"v1.0 · СПР 6.02-1-2022, глава 7",
+  lead:"Сервис отдаёт список счетов клиента, сведения по каждому счёту, актуальные балансы, перечень транзакций и выписки за период. Доступ к данным даёт согласие, которое клиент авторизует в интерфейсе банка.",
+  features:[
+    ["accounts","Счета","Список счетов клиента с IBAN, валютой, типом и статусом счёта"],
+    ["balances","Балансы","Остаток по каждому счёту и сразу по всем, в валюте счёта и в BYN"],
+    ["transactions","История операций","Перечень транзакций за выбранный период с данными плательщика и бенефициара"],
+    ["statements","Выписки","Выписка с входящим и исходящим остатком за период включительно"]
+  ],
+  cases:[
+    ["Онлайн-бухгалтерия","Сервис учёта сам подтягивает остатки и движения по счетам клиента вместо ручной загрузки выписок."],
+    ["Мультибанкинг","Одно приложение показывает счета клиента во всех банках, где они открыты."],
+    ["Бухгалтерский аутсорс","Компания, ведущая учёт для клиентов, получает их выписки по согласию без доступа к интернет-банку."],
+    ["Финансовая аналитика","Сервис строит отчёты по движению денег на основании транзакций за период."]
+  ],
+  guide:[
+    ["Получите токен приложения","Пользователь API запрашивает токен в WSO2 по client credentials. Если токен уже есть и не истёк, шаг пропускается.",[["POST","getTokenSystemDev"]]],
+    ["Создайте согласие","Передайте нужные разрешения, срок действия согласия и период транзакций. В ответе придёт accountConsentId и ссылка на согласие.",[["POST","/accountConsents"]]],
+    ["Перенаправьте клиента в банк","Клиент проходит аутентификацию в SSO банка. Банк находит его счета в УОС и показывает экран согласия.",[["POST","getUserTokenDev"]]],
+    ["Клиент авторизует согласие","Клиент выбирает счета и нажимает «Принять и сохранить». Согласие переходит в статус Authorised, клиент возвращается в ваше приложение. «Отмена» переводит согласие в Rejected.",[["GET","/accountConsents/{accountConsentId}"]]],
+    ["Запрашивайте данные","Пока согласие действует, получайте счета, балансы, транзакции и выписки по разрешённым счетам.",[["GET","/accounts"],["GET","/balances"],["POST","/statements/{accountId}"]]],
+    ["Отзовите согласие при необходимости","Если клиент отозвал доступ в вашем приложении, сообщите банку. Согласие переводится в статус Revoked и остаётся в базе.",[["DELETE","/accountConsents/{accountConsentId}"]]]
+  ],
+  groups:[
+    {id:"g-consents",name:"Согласия",desc:"Ресурс accountConsents. Согласие определяет, какие данные и за какой период получит Пользователь API (СПР, п. 52).",eps:[
+      {m:"POST",p:"/accountConsents",s:"Создание согласия на получение информации о счетах",st:"ok",uc:"UC2",h:["auth","iid","idem","ct"],
+       body:[["permissions","array","Да","Запрашиваемые разрешения, см. таблицу разрешений"],["expirationDate","date","Да","Дата окончания действия согласия, включительно"],["transactionFromDate","date","Нет","Начало периода транзакций"],["transactionToDate","date","Нет","Конец периода транзакций"]],
+       resp:consentResp,codes:"201, 400 (нет permissions или неверные даты), 401, 403"},
+      {m:"GET",p:"/accountConsents/{accountConsentId}",s:"Получение статуса согласия",st:"ok",uc:"UC5",h:["auth","iid"],
+       path:[["accountConsentId","string","Да","Идентификатор согласия"]],resp:consentResp.replace("AwaitingAuthorisation","Authorised"),codes:"200, 401, 404"},
+      {m:"DELETE",p:"/accountConsents/{accountConsentId}",s:"Отзыв согласия",st:"ok",uc:"UC12",h:["auth","iid"],
+       path:[["accountConsentId","string","Да","Идентификатор согласия"]],resp:consentResp.replace("AwaitingAuthorisation","Revoked"),
+       codes:"200; 400 — согласие не в статусе Authorised; 401 — токен отсутствует, истёк или УНК клиента не совпадает; 403; 404",
+       note:"Согласие не удаляется из базы, а переводится в статус Revoked."}
+    ]},
+    {id:"g-accounts",name:"Счета",desc:"Ресурс accounts (СПР, п. 53). Состав ответа зависит от разрешения: Basic или Detail.",eps:[
+      {m:"GET",p:"/accounts",s:"Список счетов клиента по согласию",st:"ok",uc:"UC6",perm:["ReadAccountsBasic","ReadAccountsDetail"],h:["auth","iid","consent"],
+       resp:`{
+  "data": {
+    "account": [{
+      "accountId": "BY32BELB3014103XBF0010226000",
+      "status": "Enabled",
+      "statusUpdateDateTime": "2026-10-01T09:00:00+03:00",
+      "currency": "BYN",
+      "accountType": "Individual",
+      "accountSubType": "CurrentAccount",
+      "openingDate": "2019-04-12T00:00:00+03:00",
+      "accountDetails": [{
+        "schemeName": "BY.NBRB.IBAN",
+        "identification": "BY32BELB3014103XBF0010226000",
+        "name": "Текущий счёт"
+      }],
+      "debtorAgent": {
+        "identificationClearingSystem": "BYNBB",
+        "identification": "226",
+        "name": "ОАО \\"Банк БелВЭБ\\""
+      }
+    }]
+  }
+}`,codes:"200, 401, 403, 404"},
+      {m:"GET",p:"/accounts/{accountId}",s:"Сведения по конкретному счёту",st:"ok",uc:"UC4",perm:["ReadAccountsBasic","ReadAccountsDetail"],h:["auth","iid","consent"],
+       path:[["accountId","string(35)","Да","Идентификатор счёта (IBAN)"]],
+       fields:[["status","Статус счёта; при Disabled заполняется substatus"],["accountType","Business — юрлицо, Individual — физлицо"],["accountSubType","Вид счёта по справочнику AccountSubTypeStaticType (табл. 68)"],["accountDetails.substatus","Arrested, если по счёту есть арест (YEQG061M HZAYN = Y)"],["debtorAgent.identification","Код участника клиринговой системы: 226"]],
+       codes:"200, 401, 403, 404"}
+    ]},
+    {id:"g-balances",name:"Балансы",desc:"Ресурс balances (СПР, п. 54). Для счёта может вернуться несколько балансов разного типа; у доступного баланса бывает блок creditLine.",eps:[
+      {m:"GET",p:"/balances",s:"Балансы по всем счетам согласия",st:"ok",uc:"UC7",perm:["ReadBalances"],h:["auth","iid","consent","adate","ip","ua"],
+       resp:`{
+  "data": {
+    "balance": [{
+      "accountId": "BY32BELB3014103XBF0010226000",
+      "creditDebitIndicator": "Credit",
+      "type": "InterimAvailable",
+      "dateTime": "2026-10-13T22:00:00+03:00",
+      "amount": { "amount": "417.45", "currency": "BYN" },
+      "amountByn": "417.45",
+      "creditLine": [{ "included": false, "type": "Available",
+                       "amount": { "amount": "0.00", "currency": "BYN" } }]
+    }]
+  }
+}`,codes:"200, 401, 403"},
+      {m:"GET",p:"/accounts/{accountId}/balances",s:"Баланс по конкретному счёту",st:"ok",uc:"UC7",perm:["ReadBalances"],h:["auth","iid","consent"],
+       path:[["accountId","string(35)","Да","Идентификатор счёта (IBAN)"]],codes:"200, 401, 403, 404",
+       note:"Ответ такой же, как у GET /balances, но по одному счёту. Тип баланса — по справочнику E072."}
+    ]},
+    {id:"g-transactions",name:"Транзакции",desc:"Ресурс transactions (СПР, п. 56). Работает в два шага: сначала создаётся перечень за период, затем он запрашивается по идентификатору.",eps:[
+      {m:"POST",p:"/accounts/{accountId}/transactions",s:"Создание перечня транзакций за период",st:"uos",uc:"UC8",perm:["ReadTransactionsBasic или Detail","+ ReadTransactionsCredits и/или Debits"],h:["auth","iid","idem","ct"],
+       path:[["accountId","string(35)","Да","IBAN счёта"]],
+       body:[["fromBookingDateTime","datetime","Да","Начало периода по дате отражения операции, YYYY-MM-DDThh:mm:ss±hh:mm"],["toBookingDateTime","datetime","Да","Конец периода"]],
+       resp:`{
+  "data": {
+    "transactionList": {
+      "transactionListId": "tl-7c1e…",
+      "accountId": "BY32BELB3014103XBF0010226000",
+      "fromBookingDateTime": "2026-09-01T00:00:00+03:00",
+      "toBookingDateTime": "2026-09-30T23:59:59+03:00"
+    }
+  }
+}`,codes:"201, 400, 401, 403"},
+      {m:"GET",p:"/accounts/{accountId}/transactions/{transactionListId}",s:"Получение перечня транзакций по идентификатору",st:"uos",uc:"UC9",perm:["ReadTransactionsBasic или Detail","+ ReadTransactionsCredits и/или Debits"],h:["auth","iid"],
+       path:[["accountId","string(35)","Да","IBAN счёта"],["transactionListId","string","Да","Идентификатор из ответа на POST"]],
+       fields:[["transactionId, transactionReference","Идентификатор и референс транзакции"],["creditDebitIndicator, status","Дебет/кредит; статус по справочнику N010"],["bookingDateTime, valueDateTime","Дата отражения и дата валютирования"],["amount, charge, currencyExchange","Сумма, комиссия, данные конвертации"],["debtor / creditor","Плательщик и бенефициар: наименование, идентификация, адрес, счёт, банк"],["cardInstrument","Данные карты, если операция по карте"]],
+       codes:"200, 401, 403, 404",note:"Формат ответа — СПР 6.02-1-2022, стр. 80."}
+    ]},
+    {id:"g-statements",name:"Выписки",desc:"Ресурс statements (СПР, п. 55). Как и транзакции, работает в два шага.",eps:[
+      {m:"POST",p:"/statements/{accountId}",s:"Создание выписки за период",st:"uos",uc:"UC10",perm:["ReadStatementsBasic","ReadStatementsDetail"],h:["auth","iid","idem","ct"],
+       path:[["accountId","string(35)","Да","IBAN счёта"]],
+       body:[["fromBookingDate","date","Да","Начало периода, YYYY-MM-DD, включительно"],["toBookingDate","date","Да","Конец периода, включительно"]],
+       resp:`{
+  "data": {
+    "statement": [{
+      "statementId": "st-91af…",
+      "accountId": "BY32BELB3014103XBF0010226000",
+      "fromBookingDate": "2026-09-01",
+      "toBookingDate": "2026-09-30"
+    }]
+  }
+}`,codes:"201, 400, 401, 403"},
+      {m:"GET",p:"/accounts/{accountId}/statements/{statementId}",s:"Получение выписки по идентификатору",st:"uos",uc:"UC11",perm:["ReadStatementsBasic","ReadStatementsDetail"],h:["auth","iid"],
+       path:[["accountId","string(35)","Да","IBAN счёта"],["statementId","string","Да","Идентификатор из ответа на POST"]],
+       fields:[["openingBalance","Входящий остаток: сумма, валюта, эквивалент в BYN"],["closingBalance","Исходящий остаток: сумма, валюта, эквивалент в BYN"],["transaction[]","Операции: номер платёжной инструкции, даты, назначение, сумма, плательщик, бенефициар"]],
+       codes:"200, 401, 403, 404",note:"Формат ответа — СПР 6.02-1-2022, стр. 64."}
+    ]}
+  ],
+  perms:[["ReadAccountsBasic","/accounts, /accounts/{accountId}","Основная информация о счетах"],["ReadAccountsDetail","/accounts, /accounts/{accountId}","Детальная информация, включая accountDetails и debtorAgent"],["ReadBalances","/balances, /accounts/{accountId}/balances","Балансы"],["ReadStatementsBasic","/statements, /accounts/{accountId}/statements/{statementId}","Основная информация о выписке"],["ReadStatementsDetail","то же","Детальная информация о выписке"],["ReadTransactionsBasic","/accounts/{accountId}/transactions/{transactionListId}","Основная информация о транзакциях. Требует Credits и/или Debits"],["ReadTransactionsDetail","то же","Детальная информация о транзакциях. Требует Credits и/или Debits"],["ReadTransactionsCredits","то же","Только кредитовые транзакции"],["ReadTransactionsDebits","то же","Только дебетовые транзакции"]],
+  statuses:[["AwaitingAuthorisation","Создано, ждёт авторизации клиентом"],["Authorised","Клиент авторизовал согласие"],["Rejected","Клиент отклонил согласие"],["Revoked","Клиент отозвал согласие"],["Expired","Истёк срок действия"]]
+};
+
+function payGroup(id,name,desc,res,consentRes,idName,consentIdName,opts={}){
+  const eps=[
+    {m:"POST",p:`/paymentConsents/${consentRes}`,s:`Создание согласия: ${desc.toLowerCase()}`,st:"spr",h:["auth","iid","idem","ct"],
+     body:[["data.initiation","object","Да","Параметры платежа, табл. 28 СПР"],["risk","object","Да","Параметры риска, табл. 29 СПР"]],
+     resp:`{
+  "data": {
+    "${consentIdName}": "pc-…",
+    "link": "…/paymentConsents/${consentRes}/pc-…",
+    "creationDateTime": "2026-10-13T10:00:00+03:00",
+    "status": "AwaitingAuthorisation",
+    "statusUpdateDateTime": "2026-10-13T10:00:00+03:00",
+    "cutOffDateTime": "2026-10-13T17:00:00+03:00",
+    "expectedExecutionDate": "2026-10-13",
+    "expectedSettlementDate": "2026-10-13",
+    "initiation": { … },
+    "charge": [ … ],
+    "authorisation": { … }
+  },
+  "risk": { … }
+}`,codes:"201, 400, 401, 403"},
+    {m:"GET",p:`/paymentConsents/${consentRes}/{${consentIdName}}`,s:"Статус согласия",st:"spr",h:["auth","iid"],path:[[consentIdName,"string(35)","Да","Идентификатор согласия"]],codes:"200, 401, 404"}
+  ];
+  if(opts.consentDelete) eps.push({m:"DELETE",p:`/paymentConsents/${consentRes}/{${consentIdName}}`,s:"Отзыв долгосрочного согласия",st:"spr",h:["auth","iid"],path:[[consentIdName,"string(35)","Да","Идентификатор согласия"]],codes:"204, 400, 401, 404"});
+  eps.push(
+    {m:"POST",p:`/payments/${res}`,s:"Создание платёжного указания по авторизованному согласию",st:"spr",h:["auth","iid","idem","ct"],
+     body:[["data."+consentIdName,"string","Да","Идентификатор авторизованного согласия"],["data.initiation","object","Да","Те же параметры, что в согласии"],["risk","object","Да","Параметры риска"]],codes:"201, 400, 401, 403"},
+    {m:"GET",p:`/payments/${res}/{${idName}}`,s:"Статус платёжного указания",st:"spr",h:["auth","iid"],path:[[idName,"string(35)","Да","Идентификатор платёжного указания"]],codes:"200, 401, 404"},
+    {m:"DELETE",p:`/payments/${res}/{${idName}}`,s:"Отзыв платёжного указания",st:"spr",h:["auth","iid"],path:[[idName,"string(35)","Да","Идентификатор платёжного указания"]],codes:"204, 400, 401, 404"}
+  );
+  return {id,name,desc,eps};
+}
+
+const PAY = {
+  title:"Платежи", ver:"v1.0 · СПР 6.02-1-2022, глава 14",
+  lead:"Сервис позволяет инициировать платежи от имени клиента: за товары и услуги, в бюджет, пакетные переводы, платежи по требованию бенефициара и рекуррентные платежи. Каждый платёж проходит через согласие, которое клиент авторизует в банке.",
+  features:[
+    ["domestic","Платежи за товары и услуги","Разовый перевод со счёта клиента по инициативе плательщика"],
+    ["domesticTax","Платежи в бюджет","Налоги и обязательные платежи с бюджетными реквизитами"],
+    ["list","Пакетные платежи","Список бенефициаров со счетами или переводы без открытия счёта"],
+    ["VRP","Рекуррентные платежи","Долгосрочное согласие и серия платёжных указаний по нему"]
+  ],
+  cases:[
+    ["Оплата в интернет-магазине","Покупатель платит со своего счёта без ввода карты, магазин сразу видит статус платежа."],
+    ["Зарплатные реестры","Учётная система отправляет пакет переводов сотрудникам одним согласием."],
+    ["Налоговый календарь","Бухгалтерский сервис готовит платёж в бюджет, клиент только подтверждает его в банке."],
+    ["Подписки","Сервис списывает регулярные платежи по долгосрочному согласию VRP."]
+  ],
+  guide:[
+    ["Получите токен приложения","Тот же механизм, что и для API Счета: client credentials в WSO2.",[["POST","getTokenSystemDev"]]],
+    ["Создайте согласие на платёж","Передайте параметры платежа в блоке initiation и параметры риска. Ресурс выбирается по виду платежа.",[["POST","/paymentConsents/domestic"]]],
+    ["Клиент авторизует согласие","Клиент входит в банк и подтверждает платёж. Согласие получает статус Authorised.",[["GET","/paymentConsents/domestic/{domesticConsentId}"]]],
+    ["Создайте платёжное указание","Отправьте указание с идентификатором авторизованного согласия. Разовое согласие после этого переходит в Consumed.",[["POST","/payments/domestic"]]],
+    ["Отслеживайте статус","Проверяйте статус указания. До исполнения указание можно отозвать.",[["GET","/payments/domestic/{domesticId}"],["DELETE","/payments/domestic/{domesticId}"]]],
+    ["Смотрите все операции клиента","Сводные запросы возвращают все согласия и все указания клиента за период.",[["GET","/paymentConsents?fromCreationDate=&toCreationDate="],["GET","/payments?fromCreationDate=&toCreationDate="]]]
+  ],
+  groups:[
+    payGroup("p-domestic","Платёж за товары, работы, услуги","Платёж плательщика за товары, работы, услуги","domestic","domestic","domesticId","domesticConsentId"),
+    payGroup("p-tax","Платёж в бюджет","Платёж плательщика в бюджет","domesticTax","domesticTax","domesticTaxId","domesticTaxConsentId"),
+    payGroup("p-listacc","Список бенефициаров со счетами","Платёж со списком бенефициаров с указанием их счетов","listAccounts","listAccounts","listAccountsId","listAccountsConsentId"),
+    payGroup("p-listpass","Список бенефициаров без открытия счёта","Платёж со списком бенефициаров при переводе без открытия счёта","listPassports","listPassports","listPassportsId","listPassportsConsentId"),
+    payGroup("p-req","Требование бенефициара за товары, работы, услуги","Платёж по инициативе бенефициара за товары, работы, услуги","requirement","requirement","requirementId","requirementConsentId"),
+    payGroup("p-taxreq","Требование бенефициара (взыскателя) в бюджет","Платёж по инициативе взыскателя в бюджет","taxRequirements","taxRequirement","taxRequirementId","taxRequirementConsentId"),
+    payGroup("p-vrp","Рекуррентный платёж (VRP)","Долгосрочное согласие на рекуррентный платёж","VRP","VRP","VRPId","VRPConsentId",{consentDelete:true}),
+    {id:"p-all",name:"Сводные запросы",desc:"Все согласия и все платёжные указания клиента (СПР, п. 90, табл. 64).",eps:[
+      {m:"GET",p:"/paymentConsents?fromCreationDate=&toCreationDate=&type=&status=",s:"Все согласия клиента на платежи",st:"spr",h:["auth","iid"],
+       query:[["fromCreationDate","date","Да","Начало периода создания"],["toCreationDate","date","Да","Конец периода создания"],["type","string","Нет","Тип согласия, справочник PaymentConsentStaticType (табл. 78)"],["status","string","Нет","Статус согласия"]],
+       resp:`{
+  "data": {
+    "paymentConsent": [{
+      "paymentConsentId": "pc-…",
+      "creationDateTime": "2026-10-13T10:00:00+03:00",
+      "status": "Authorised",
+      "type": "domestic"
+    }]
+  }
+}`,codes:"200, 400, 401"},
+      {m:"GET",p:"/payments?fromCreationDate=&toCreationDate=&type=&status=",s:"Все платёжные указания клиента",st:"spr",h:["auth","iid"],
+       query:[["fromCreationDate","date","Да","Начало периода создания"],["toCreationDate","date","Да","Конец периода создания"],["type","string","Нет","Тип платёжного указания"],["status","string","Нет","Статус указания"]],codes:"200, 400, 401"}
+    ]}
+  ],
+  perms:null,
+  statuses:[["AwaitingAuthorisation","Согласие ожидает авторизации"],["Authorised","Согласие авторизовано"],["Rejected","Согласие отклонено"],["Consumed","Согласие использовано и больше не применяется. Отзыв через DELETE предусмотрен только для VRP"]]
+};
+
+const APIS={accounts:ACC,payments:PAY};
+const esc=s=>String(s).replace(/&(?!lt;|gt;)/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const table=(head,rows)=>`<div class="tbl"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td>${i===0?`<code>${esc(c)}</code>`:c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+
+function review(a){
+  return `<h2>Возможности</h2><div class="grid4">${a.features.map(f=>`<div class="tile"><span class="k">${f[0]}</span><h3>${f[1]}</h3><p>${f[2]}</p></div>`).join("")}</div>
+  <h2>Примеры использования API ${a.title}</h2><div class="grid4">${a.cases.map(c=>`<div class="tile"><h3>${c[0]}</h3><p>${c[1]}</p></div>`).join("")}</div>
+  <h2>Как начать</h2><ol class="steps">
+   <li><h3>Регистрация</h3><p>Зарегистрируйтесь и войдите на портал</p></li>
+   <li><h3>Приложение</h3><p>Создайте приложение, выберите тип авторизации и укажите Redirect URL, подпишите его на API ${a.title}</p></li>
+   <li><h3>Тестирование</h3><p>Вызывайте API в песочнице по Client ID и Client Secret</p></li>
+   <li><h3>Промышленный доступ</h3><p>Подайте заявку; банк свяжется с вами для заключения договора</p></li>
+   <li><h3>Интеграция</h3><p>Используйте промышленные ключи приложения в своей системе</p></li></ol>`;
+}
+function guides(a){
+  return `<h2>Сценарий интеграции</h2><div class="flow">${a.guide.map((g,i)=>`<div class="fstep"><div class="n">${i+1}</div><div><h3>${g[0]}</h3><p>${g[1]}</p><div class="call">${g[2].map(c=>`<span class="chip"><span class="m ${c[0]}" style="padding:2px 6px">${c[0]}</span>${esc(c[1])}</span>`).join("")}</div></div></div>`).join("")}</div>`;
+}
+function ep(e,gi,ei){
+  const [cls,lab]=ST[e.st];
+  const line=`${e.m} ${BASE}${e.p}`;
+  let b=`<div><h4>Строка запроса</h4><div class="req"><span>${esc(line)}</span><button class="copy" type="button" data-copy="${esc(line)}">Копировать</button></div></div>`;
+  if(e.perm) b+=`<div><h4>Разрешения</h4>${e.perm.map(p=>`<span class="pill">${p}</span>`).join("")}</div>`;
+  b+=`<div><h4>Заголовки</h4>${table(["Заголовок","Описание","Обяз."],e.h.map(k=>H[k]))}</div>`;
+  if(e.path) b+=`<div><h4>Параметры пути</h4>${table(["Параметр","Тип","Обяз.","Описание"],e.path)}</div>`;
+  if(e.query) b+=`<div><h4>Параметры запроса</h4>${table(["Параметр","Тип","Обяз.","Описание"],e.query)}</div>`;
+  if(e.body) b+=`<div><h4>Тело запроса</h4>${table(["Поле","Тип","Обяз.","Описание"],e.body)}</div>`;
+  if(e.fields) b+=`<div><h4>Ключевые поля ответа</h4>${table(["Поле","Описание"],e.fields)}</div>`;
+  if(e.resp) b+=`<div><h4>Пример ответа</h4><pre>${esc(e.resp)}</pre></div>`;
+  b+=`<div><h4>Коды ответа</h4><span class="note">${e.codes}</span></div>`;
+  if(e.note) b+=`<p class="note" style="margin:0">${e.note}</p>`;
+  if(e.uc) b+=`<p class="note" style="margin:0">Юзкейс: ${e.uc}</p>`;
+  return `<details class="ep" id="ep-${gi}-${ei}"><summary><span class="m ${e.m}">${e.m}</span><span><span class="path">${esc(e.p)}</span><span class="sum">${e.s}</span></span><span class="st ${cls}">${lab}</span></summary><div class="epb">${b}</div></details>`;
+}
+function doc(a,key){
+  const toc=`<b>Начало работы</b><a href="#d-base">Адрес и версия</a><a href="#d-auth">Авторизация</a><a href="#d-headers">Общие заголовки</a>${a.perms?'<a href="#d-perms">Разрешения</a>':''}<a href="#d-status">Статусы согласия</a><a href="#d-err">Ошибки</a><b>Методы</b>${a.groups.map(g=>`<a href="#${g.id}">${g.name}</a>`).join("")}`;
+  const total=a.groups.reduce((n,g)=>n+g.eps.length,0);
+  let main=`<div class="box" id="d-base"><h3>Адрес и версия</h3><dl class="kv"><dt>Тестовый контур</dt><dd><code>${BASE}</code></dd><dt>Swagger</dt><dd><a href="${BASE}/swagger-ui/index.html" target="_blank" rel="noopener">swagger-ui/index.html</a></dd><dt>Стандарт</dt><dd>СПР 6.02-1-2022, СПР 6.02-2-2022</dd><dt>Формат</dt><dd>JSON, UTF-8; даты ISO 8601 (YYYY-MM-DDThh:mm:ss±hh:mm)</dd><dt>Методов</dt><dd>${total}</dd></dl></div>
+  <div class="box" id="d-auth"><h3>Авторизация</h3><p class="note" style="margin-top:0">OAuth 2.0 через WSO2 API Manager. Токен в формате JWT с ограниченным сроком жизни; после истечения запросите новый. WSO2 проверяет сертификат приложения и ограничивает частоту запросов токена.</p>
+   ${table(["Запрос","Назначение","Параметры"],[["POST getTokenSystemDev","Токен Пользователя API","grant_type=client_credentials"],["POST getUserTokenDev","Аутентификация клиента в SSO","username, password, grant_type, scope; в ответе refresh_token и user_id (УНК)"]])}
+   <pre style="margin-top:12px">${esc(`{
+  "access_token": "eyJhbGciOiJIUzI1NiIs…",
+  "token_type": "bearer",
+  "expires_in": 71999,
+  "scope": "requests.allow",
+  "owner": "Банк БелВЭБ",
+  "jti": "337ca5e0-8995-46a9-8116-07cfac0be61f"
+}`)}</pre></div>
+  <div class="box" id="d-headers"><h3>Общие заголовки</h3>${table(["Заголовок","Описание","Обяз."],[H.auth,H.iid,H.idem.map((x,i)=>i===2?"Для POST":x),H.ct.map((x,i)=>i===2?"Для POST":x),H.adate,H.ip])}</div>
+  ${a.perms?`<div class="box" id="d-perms"><h3>Разрешения (permissions)</h3>${table(["Разрешение","Ресурсы","Назначение"],a.perms)}</div>`:''}
+  <div class="box" id="d-status"><h3>Статусы согласия</h3>${table(["Статус","Значение"],a.statuses)}</div>
+  <div class="box" id="d-err"><h3>Ошибки</h3>${table(["Код","Когда возникает"],[["400 Bad Request","Неверные или отсутствующие параметры, неподходящий статус согласия"],["401 Unauthorized","Токен отсутствует, истёк, или УНК клиента не совпадает с согласием"],["403 Forbidden","У приложения нет нужного разрешения"],["404 Not Found","Согласие, счёт или ресурс не найдены"],["5xx","Ошибка на стороне банка; повторите запрос с тем же x-idempotency-key"]])}</div>`;
+  main+=a.groups.map((g,gi)=>`<section class="group" id="${g.id}"><h2>${g.name}</h2><p>${g.desc}</p>${g.eps.map((e,ei)=>ep(e,key+gi,ei)).join("")}</section>`).join("");
+  return `<div class="docs"><aside class="toc">${toc}</aside><div style="min-width:0">${main}</div></div>`;
+}
+
+let state={api:"accounts",tab:"review"};
+function render(){
+  const a=APIS[state.api];
+  document.querySelectorAll("[data-api]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.api===state.api));
+  document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===state.tab));
+  document.getElementById("apiTitle").textContent=a.title;
+  document.getElementById("apiLead").textContent=a.lead;
+  document.getElementById("ver").textContent=a.ver;
+  const v=document.getElementById("view");
+  v.innerHTML= state.tab==="review"?review(a): state.tab==="guides"?guides(a): doc(a,state.api[0]);
+}
+function go(api,tab){state.api=api;state.tab=tab;try{history.replaceState(null,"","#"+api+"-"+tab)}catch(e){};render()}
+document.querySelectorAll("[data-api]").forEach(b=>b.onclick=()=>go(b.dataset.api,state.tab));
+document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>go(state.api,b.dataset.tab));
+document.getElementById("view").addEventListener("click",e=>{
+  const c=e.target.closest(".copy"); if(!c) return;
+  const t=c.dataset.copy.replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&");
+  const done=()=>{c.textContent="Скопировано";setTimeout(()=>c.textContent="Копировать",1500)};
+  try{navigator.clipboard.writeText(t).then(done,()=>{sel(c)})}catch(_){sel(c)}
+});
+function sel(c){const s=c.previousElementSibling;const r=document.createRange();r.selectNodeContents(s);const w=getSelection();w.removeAllRanges();w.addRange(r)}
+const m=(location.hash||"").slice(1).match(/^(accounts|payments)-(review|guides|doc)$/);
+if(m){state.api=m[1];state.tab=m[2]}
+render();
+</script>
+
+</body></html>
