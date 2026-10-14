@@ -104,6 +104,8 @@ details.ep summary::-webkit-details-marker{display:none}
 .st.none{background:var(--none-bg);color:var(--none)}
 @media (max-width:560px){details.ep summary{grid-template-columns:64px minmax(0,1fr)}details.ep summary .st{grid-column:2;justify-self:start}}
 .epb{border-top:1px solid var(--line);padding:16px;display:grid;gap:16px}
+.issues{border-color:var(--warn)}
+.issues h3{color:var(--warn)}
 .desc{display:grid;gap:10px}
 .desc p{margin:0;max-width:78ch}
 .desc .val{background:var(--accent-soft);border-radius:6px;padding:10px 14px;font-size:14px}
@@ -143,43 +145,219 @@ footer{border-top:1px solid var(--line);color:var(--muted);font-size:13px;paddin
 
 <main class="wrap" id="view"></main>
 
-<footer><div class="wrap">Описание составлено по СПР 6.02-1-2022 «Открытые банковские API» и внутреннему описанию «Сервис счетов» (ред. 19.08.2026). Статусы реализации указаны на дату ревизии.</div></footer>
+<footer><div class="wrap">Источники: спецификации Accounts_bveb и Payments_bveb (OpenAPI 3.0.1, v1) из WSO2 Dev Portal, СПР 6.02-1-2022 и внутреннее описание «Сервис счетов» (ред. 19.08.2026). Статусы реализации указаны на дату ревизии.</div></footer>
 
 <script>
-const BASE = "https://dev-open-banking-accounts-api-new-wso2.lab.vebtech.by";
+const GW = "https://pp-wso2-gw.bveb.by/open-banking/1";
+const AUTH_URL = "https://pp-wso2-gw.bveb.by/authorize";
 const H = {
-  auth:["Authorization","Bearer &lt;access_token&gt; — токен Пользователя API из WSO2","Да"],
-  iid:["x-fapi-interaction-id","RFC4122 UID, идентификатор корреляции","Да"],
-  idem:["x-idempotency-key","Уникальный ключ запроса для идемпотентности","Да"],
-  ct:["Content-Type","application/json","Да"],
-  adate:["x-fapi-auth-date","Время последнего входа клиента через TPP (RFC7231)","Нет"],
+  auth:["Authorization","Bearer &lt;access_token&gt; — токен Пользователя API второго типа, полученный через WSO2 (OAuth 2.0)","Да*"],
+  apikey:["x-api-key","Apikey, сгенерированный в СДБО банка, для Пользователя API первого типа","Нет*"],
+  iid:["x-fapi-interaction-id","RFC4122 UID, идентификатор корреляции; банк возвращает его в ответе","Да"],
+  idem:["x-idempotency-key","Ключ идемпотентности до 40 символов: повтор запроса с тем же ключом не создаст дубль","Рекоменд."],
+  ct:["Content-Type","application/json; для платежей также application/jose+jwe","Да"],
+  adate:["x-fapi-auth-date","Время последнего входа клиента через TPP, формат RFC7231: Sun, 10 Sep 2017 19:43:31 UTC","Нет"],
   ip:["x-fapi-customer-ip-address","IP-адрес клиента, если он вошёл через TPP","Нет"],
-  ua:["x-customer-user-agent","Тип устройства клиента","Нет"],
-  consent:["x-consent-id","Идентификатор согласия, в рамках которого выполняется запрос","Да"]
+  ua:["x-customer-useragent","Тип устройства клиента (user-agent)","Нет"],
+  acons:["x-accountConsentId","Идентификатор согласия, в рамках которого выполняется запрос","Да"]
 };
-const ST = {ok:["ok","Готово"], uos:["warn","Нет точки в УОС"], spr:["none","По СПР"]};
+const ST = {ok:["ok","Готово"], uos:["warn","Нет точки в УОС"], test:["none","Опубликован в WSO2 (тест)"]};
+const PAGE = [["page","integer","Нет","Номер страницы, по умолчанию 1"]];
+const ACC_ERR = "201/200 · 400 · 401 · 403 · 404 · 405 · 406 · 415 · 429 · 500 · 503";
 
-const consentResp = `{
+/* ---------- Счета: примеры ---------- */
+const exConsentReq = `{
   "data": {
-    "accountConsentId": "bf571366-248b-482d-88f4-2d429a1d858c",
-    "link": "${BASE}/accountConsents/bf571366-…",
-    "status": "AwaitingAuthorisation",
-    "statusUpdateDateTimeConsent": "2024-05-29T14:03:48+03:00",
-    "creationDateTime": "2024-05-29T11:03:48+03:00",
-    "permissions": ["ReadAccountsBasic", "ReadBalances"],
-    "expirationDate": "2027-05-29",
-    "transactionFromDate": "2024-01-01",
-    "transactionToDate": "2024-05-29"
+    "permissions": [
+      "ReadAccountsDetail", "ReadBalances",
+      "ReadTransactionsDetail", "ReadTransactionsCredits", "ReadTransactionsDebits",
+      "ReadStatementsDetail"
+    ],
+    "expirationDate": "2029-10-13",
+    "transactionFromDate": "2026-01-01",
+    "transactionToDate": "2026-10-13"
   }
 }`;
+const exConsentResp = st => `{
+  "data": {
+    "accountConsentId": "3cgfc598-r5gh-9758-b358-587a5479610",
+    "link": "https://sdbo.bank.by/accountConsentId/3cgfc598-r5gh-9758-b358-587a5479610/",
+    "status": "${st}",
+    "statusUpdateDateTime": "2026-10-13T10:00:00+03:00",
+    "creationDateTime": "2026-10-13T10:00:00+03:00",
+    "permissions": ["ReadAccountsDetail", "ReadBalances", "…"],
+    "expirationDate": "2029-10-13",
+    "transactionFromDate": "2026-01-01",
+    "transactionToDate": "2026-10-13"
+  }
+}`;
+const exAccounts = `{
+  "data": {
+    "account": [{
+      "accountId": "12345TEST",
+      "status": "Enabled",
+      "statusUpdateDateTime": "2026-10-01T09:00:00+03:00",
+      "currency": "BYN",
+      "accountType": "Business",
+      "accountSubType": "CurrentAccount",
+      "creationDateTime": "2019-04-12T00:00:00+03:00",
+      "accountDescription": "Текущий расчетный счет",
+      "accountDetails": {
+        "schemeName": "BY.NBRB.IBAN",
+        "identification": "BY00BELB30120000000000000000",
+        "name": "Текущий расчетный счет"
+      },
+      "debtorAgent": {
+        "identificationClearingSystem": "BYNBB",
+        "identification": "226",
+        "name": "ОАО \\"Банк БелВЭБ\\""
+      }
+    }]
+  },
+  "links": { "self": "…/accounts?page=1", "next": "…/accounts?page=2" },
+  "meta": { "totalPages": 2 }
+}`;
+const exBalances = `{
+  "data": {
+    "balance": [{
+      "accountId": "12345TEST",
+      "creditDebitIndicator": "Credit",
+      "type": "CLAV",
+      "dateTime": "2026-10-13T22:00:00+03:00",
+      "balanceAmount": "417.45",
+      "currency": "BYN",
+      "balanceEquivalentAmount": "417.45",
+      "creditLine": [{
+        "included": false,
+        "type": "Revolving",
+        "creditLineAmount": "1000.00",
+        "currency": "BYN"
+      }]
+    }]
+  },
+  "links": { "self": "…/balances" },
+  "meta": { "totalPages": 1 }
+}`;
+const exTrReq = `{
+  "data": {
+    "transaction": {
+      "fromBookingDateTime": "2026-09-01T00:00:00+03:00",
+      "toBookingDateTime": "2026-09-30T23:59:59+03:00"
+    }
+  }
+}`;
+const exTrCreated = `{
+  "data": {
+    "transaction": {
+      "transactionListId": "tl-7c1e2a",
+      "accountId": "12345TEST",
+      "fromBookingDateTime": "2026-09-01T00:00:00+03:00",
+      "toBookingDateTime": "2026-09-30T23:59:59+03:00"
+    }
+  }
+}`;
+const exTrList = `{
+  "data": {
+    "transactionListId": "tl-7c1e2a",
+    "accountId": "12345TEST",
+    "fromBookingDateTime": "2026-09-01T00:00:00+03:00",
+    "toBookingDateTime": "2026-09-30T23:59:59+03:00",
+    "creationDateTime": "2026-10-13T10:05:00+03:00",
+    "transaction": [{
+      "transactionId": "111",
+      "transactionReference": "Ref 1",
+      "creditDebitIndicator": "Debit",
+      "status": "Z00",
+      "bookingDateTime": "2026-09-15T12:30:00+03:00",
+      "valueDate": "2026-09-15",
+      "transactionDetails": "Оплата по счету №45 от 10.09.2026",
+      "amount": "250.00",
+      "currency": "BYN",
+      "chargeAmount": { "amount": "0.50", "currency": "BYN" },
+      "balance": {
+        "creditDebitIndicator": "Credit", "type": "CLAV",
+        "balanceAmount": "167.45", "currency": "BYN"
+      },
+      "creditor": { "name": "ООО «Поставщик»" },
+      "creditorAccount": { "schemeName": "BY.NBRB.IBAN", "identification": "BY00XXXX30120000000000000000" },
+      "creditorAgent": { "identification": "BELBBY2X", "name": "ОАО \\"Банк БелВЭБ\\"" }
+    }]
+  },
+  "links": { "self": "…/transactions/tl-7c1e2a?page=1" },
+  "meta": {
+    "totalPages": 1,
+    "firstAvailableDateTime": "2026-09-02T09:14:00+03:00",
+    "lastAvailableDateTime": "2026-09-29T18:40:00+03:00"
+  }
+}`;
+const exStReq = `{
+  "data": {
+    "statement": { "fromBookingDate": "2026-09-01", "toBookingDate": "2026-09-30" }
+  }
+}`;
+const exStCreated = `{
+  "data": {
+    "statement": {
+      "accountId": "12345TEST",
+      "statementId": "8sfhke-sifhkeuf-97813",
+      "fromBookingDate": "2026-09-01",
+      "toBookingDate": "2026-09-30"
+    }
+  }
+}`;
+const exSt = `{
+  "data": {
+    "statement": {
+      "accountId": "12345TEST",
+      "statementId": "8sfhke-sifhkeuf-97813",
+      "fromBookingDate": "2026-09-01",
+      "toBookingDate": "2026-09-30",
+      "creationDateTime": "2026-10-13T10:10:00+03:00",
+      "openingAvailableBalance": {
+        "creditDebitIndicator": "Credit", "amount": "417.45",
+        "currency": "BYN", "equivalentAmount": "417.45"
+      },
+      "closingAvailableBalance": {
+        "creditDebitIndicator": "Credit", "amount": "167.45",
+        "currency": "BYN", "equivalentAmount": "167.45"
+      },
+      "transaction": [{
+        "transactionId": "111",
+        "creditDebitIndicator": "Debit",
+        "status": "Z00",
+        "number": "1234567",
+        "bookingDateTime": "2026-09-15T12:30:00+03:00",
+        "valueDate": "2026-09-15",
+        "transactionDetails": "Оплата по счету №45 от 10.09.2026",
+        "amount": "250.00",
+        "currency": "BYN",
+        "equivalentAmount": "250.00",
+        "creditor": { "name": "ООО «Поставщик»" },
+        "creditorAccount": { "schemeName": "BY.NBRB.IBAN", "identification": "BY00XXXX30120000000000000000" }
+      }]
+    }
+  },
+  "links": { "self": "…/statements/8sfhke-sifhkeuf-97813?page=1" },
+  "meta": { "totalPages": 1 }
+}`;
+
+const ACC_FIELDS = [
+  ["status","Enabled — доступен, Disabled — временно или навсегда недоступен, Deleted — закрыт, Pending — изменения ждут подтверждения"],
+  ["accountType","Business — счёт юрлица или ИП, Individual — физлица"],
+  ["accountSubType","CreditCard, CurrentAccount, Loan, Mortgage, Installment, Savings, Other"],
+  ["accountDetails.schemeName","BY.NBRB.IBAN, BY.NBRB.OTHER, BY.ERIP.CLIENT"],
+  ["accountDetails.substatus / reason","Arrested, Blocked, Fixed, Suspended, Stopped и текстовая причина; заполняется при ограничениях"],
+  ["debtorAgent","Банк, обслуживающий счёт: клиринговая система, код участника, наименование"]
+];
 
 const ACC = {
-  title:"Счета", ver:"v1.0 · СПР 6.02-1-2022, глава 7",
-  lead:"Сервис отдаёт список счетов клиента, сведения по каждому счёту, актуальные балансы, перечень транзакций и выписки за период. Доступ к данным даёт согласие, которое клиент авторизует в интерфейсе банка.",
+  key:"accounts", title:"Счета", base:GW+"/accounts-info", ver:"Accounts_bveb · v1 · СПР 6.02-1-2022",
+  portal:"https://pp-wso2-am.bveb.by/devportal/apis/5aa6cd02-9bc6-48b2-a874-167ffe14f64d/test",
+  lead:"API отдаёт список счетов клиента, сведения по каждому счёту и ограничениям на нём, актуальные балансы, перечень транзакций и выписки за период. Доступ даёт долгосрочное согласие клиента сроком до 3 лет.",
   features:[
-    ["accounts","Счета","Список счетов клиента с IBAN, валютой, типом и статусом счёта"],
-    ["balances","Балансы","Остаток по каждому счёту и сразу по всем, в валюте счёта и в BYN"],
-    ["transactions","История операций","Перечень транзакций за выбранный период с данными плательщика и бенефициара"],
+    ["accounts","Счета","Список счетов с IBAN, валютой, типом, видом и статусом, включая аресты и блокировки"],
+    ["balances","Балансы","Остатки по каждому счёту и сразу по всем, в валюте счёта и в BYN, с кредитными линиями"],
+    ["transactions","История операций","Транзакции за период с плательщиком, бенефициаром, комиссией и курсом конвертации"],
     ["statements","Выписки","Выписка с входящим и исходящим остатком за период включительно"]
   ],
   cases:[
@@ -189,261 +367,384 @@ const ACC = {
     ["Финансовая аналитика","Сервис строит отчёты по движению денег на основании транзакций за период."]
   ],
   guide:[
-    ["Получите токен приложения","Пользователь API запрашивает токен в WSO2 по client credentials. Если токен уже есть и не истёк, шаг пропускается.",[["POST","getTokenSystemDev"]]],
-    ["Создайте согласие","Передайте нужные разрешения, срок действия согласия и период транзакций. В ответе придёт accountConsentId и ссылка на согласие.",[["POST","/accountConsents"]]],
-    ["Перенаправьте клиента в банк","Клиент проходит аутентификацию в SSO банка. Банк находит его счета в УОС и показывает экран согласия.",[["POST","getUserTokenDev"]]],
-    ["Клиент авторизует согласие","Клиент выбирает счета и нажимает «Принять и сохранить». Согласие переходит в статус Authorised, клиент возвращается в ваше приложение. «Отмена» переводит согласие в Rejected.",[["GET","/accountConsents/{accountConsentId}"]]],
-    ["Запрашивайте данные","Пока согласие действует, получайте счета, балансы, транзакции и выписки по разрешённым счетам.",[["GET","/accounts"],["GET","/balances"],["POST","/statements/{accountId}"]]],
-    ["Отзовите согласие при необходимости","Если клиент отозвал доступ в вашем приложении, сообщите банку. Согласие переводится в статус Revoked и остаётся в базе.",[["DELETE","/accountConsents/{accountConsentId}"]]]
+    ["Подключите приложение","Зарегистрируйте приложение в Dev Portal WSO2 и подпишите его на API Счета. Пользователь API второго типа получает токен по OAuth 2.0, первого типа использует x-api-key из СДБО банка.",[["GET",AUTH_URL.replace("https://","")]]],
+    ["Создайте согласие","Передайте разрешения, срок действия (не более 3 лет) и период транзакций. В ответе придут accountConsentId и ссылка на согласие в СДБО.",[["POST","/accountConsents"]]],
+    ["Перенаправьте клиента в банк","Клиент проходит аутентификацию в банке по ссылке link, выбирает счета и подтверждает доступ. Согласие переходит в статус Authorised, при отказе — Rejected.",[["GET","/accountConsents/{accountConsentId}"]]],
+    ["Запрашивайте данные","Передавайте идентификатор согласия в заголовке x-accountConsentId. Длинные списки приходят постранично: параметр page и блоки links и meta.",[["GET","/accounts"],["GET","/balances"]]],
+    ["Получайте операции и выписки","Сначала создайте перечень транзакций или выписку за период, затем заберите их по идентификатору. Пока данные готовятся, банк отвечает ошибкой BY.NBRB.Resource.NotCreated: повторите запрос позже.",[["POST","/statements/{accountId}"],["GET","/accounts/{accountId}/statements/{statementId}"]]],
+    ["Отзовите согласие при необходимости","Если клиент отозвал доступ в вашем приложении, сообщите банку. Ответ 204, согласие переходит в статус Revoked.",[["DELETE","/accountConsents/{accountConsentId}"]]]
   ],
   groups:[
-    {id:"g-consents",name:"Согласия",desc:"Ресурс accountConsents. Согласие определяет, какие данные и за какой период получит Пользователь API (СПР, п. 52).",eps:[
-      {m:"POST",p:"/accountConsents",s:"Создание согласия на получение информации о счетах",st:"ok",uc:"UC2",h:["auth","iid","idem","ct"],
-       body:[["permissions","array","Да","Запрашиваемые разрешения, см. таблицу разрешений"],["expirationDate","date","Да","Дата окончания действия согласия, включительно"],["transactionFromDate","date","Нет","Начало периода транзакций"],["transactionToDate","date","Нет","Конец периода транзакций"]],
-       resp:consentResp,codes:"201, 400 (нет permissions или неверные даты), 401, 403"},
-      {m:"GET",p:"/accountConsents/{accountConsentId}",s:"Получение статуса согласия",st:"ok",uc:"UC5",h:["auth","iid"],
-       path:[["accountConsentId","string","Да","Идентификатор согласия"]],resp:consentResp.replace("AwaitingAuthorisation","Authorised"),codes:"200, 401, 404"},
-      {m:"DELETE",p:"/accountConsents/{accountConsentId}",s:"Отзыв согласия",st:"ok",uc:"UC12",h:["auth","iid"],
-       path:[["accountConsentId","string","Да","Идентификатор согласия"]],resp:consentResp.replace("AwaitingAuthorisation","Revoked"),
-       codes:"200; 400 — согласие не в статусе Authorised; 401 — токен отсутствует, истёк или УНК клиента не совпадает; 403; 404",
-       note:"Согласие не удаляется из базы, а переводится в статус Revoked."}
+    {id:"g-consents",name:"Согласия",desc:"Тег AccountConsents. Долгосрочное согласие сроком не более 3 лет определяет, какие данные и за какой период получит Пользователь API.",eps:[
+      {m:"POST",p:"/accountConsents",s:"Создание согласия на получение информации о счетах",st:"ok",op:"createConsent",h:["auth","apikey","iid","idem","ct","adate","ip","ua"],
+       body:[["data.permissions","array","Да","Разрешения; минимум ReadAccountsBasic или ReadAccountsDetail"],["data.expirationDate","date","Нет","Последний день действия согласия, не позже чем через 3 года"],["data.transactionFromDate","date","Нет","Начало периода транзакций; без него — с первой доступной"],["data.transactionToDate","date","Нет","Конец периода транзакций; без него — до последней доступной"]],
+       req:exConsentReq, resp:exConsentResp("AwaitingAuthorisation"), codes:"201 Created · 400 · 401 · 403 · 404 · 405 · 406 · 415 · 429 · 500 · 503",
+       note:"Банк вернёт 400, если разрешения пустые или неизвестны банку, если ReadTransactionsBasic или ReadTransactionsDetail переданы без ReadTransactionsCredits/Debits, и наоборот."},
+      {m:"GET",p:"/accountConsents/{accountConsentId}",s:"Получение статуса согласия",st:"ok",op:"getConsentById",h:["auth","apikey","iid","adate","ip","ua"],
+       path:[["accountConsentId","string(35)","Да","Идентификатор согласия"]],resp:exConsentResp("Authorised"),codes:"200 · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500 · 503"},
+      {m:"DELETE",p:"/accountConsents/{accountConsentId}",s:"Удаление (отзыв) согласия",st:"ok",op:"revokeConsent",h:["auth","apikey","iid","adate","ip","ua"],
+       path:[["accountConsentId","string(35)","Да","Идентификатор согласия"]],codes:"204 No Content · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500 · 503",
+       note:"Ответ без тела. Согласие не удаляется из базы, а переводится в статус Revoked."}
     ]},
-    {id:"g-accounts",name:"Счета",desc:"Ресурс accounts (СПР, п. 53). Состав ответа зависит от разрешения: Basic или Detail.",eps:[
-      {m:"GET",p:"/accounts",s:"Список счетов клиента по согласию",st:"ok",uc:"UC6",perm:["ReadAccountsBasic","ReadAccountsDetail"],h:["auth","iid","consent"],
-       resp:`{
-  "data": {
-    "account": [{
-      "accountId": "BY32BELB3014103XBF0010226000",
-      "status": "Enabled",
-      "statusUpdateDateTime": "2026-10-01T09:00:00+03:00",
-      "currency": "BYN",
-      "accountType": "Individual",
-      "accountSubType": "CurrentAccount",
-      "openingDate": "2019-04-12T00:00:00+03:00",
-      "accountDetails": [{
-        "schemeName": "BY.NBRB.IBAN",
-        "identification": "BY32BELB3014103XBF0010226000",
-        "name": "Текущий счёт"
-      }],
-      "debtorAgent": {
-        "identificationClearingSystem": "BYNBB",
-        "identification": "226",
-        "name": "ОАО \\"Банк БелВЭБ\\""
-      }
-    }]
-  }
-}`,codes:"200, 401, 403, 404"},
-      {m:"GET",p:"/accounts/{accountId}",s:"Сведения по конкретному счёту",st:"ok",uc:"UC4",perm:["ReadAccountsBasic","ReadAccountsDetail"],h:["auth","iid","consent"],
-       path:[["accountId","string(35)","Да","Идентификатор счёта (IBAN)"]],
-       fields:[["status","Статус счёта; при Disabled заполняется substatus"],["accountType","Business — юрлицо, Individual — физлицо"],["accountSubType","Вид счёта по справочнику AccountSubTypeStaticType (табл. 68)"],["accountDetails.substatus","Arrested, если по счёту есть арест (YEQG061M HZAYN = Y)"],["debtorAgent.identification","Код участника клиринговой системы: 226"]],
-       codes:"200, 401, 403, 404"}
+    {id:"g-accounts",name:"Счета",desc:"Тег Accounts. Полученный accountId используется во всех остальных методах: балансы, транзакции, выписки.",eps:[
+      {m:"GET",p:"/accounts",s:"Получение информации о счетах",st:"ok",op:"getAccounts",perm:["ReadAccountsBasic","ReadAccountsDetail"],h:["auth","apikey","iid","acons","adate","ip","ua"],
+       query:PAGE,resp:exAccounts,fields:ACC_FIELDS,codes:"200 · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500 · 503"},
+      {m:"GET",p:"/accounts/{accountId}",s:"Получение информации о счёте",st:"ok",op:"getAccountById",perm:["ReadAccountsBasic","ReadAccountsDetail"],h:["auth","apikey","iid","acons","adate","ip","ua"],
+       path:[["accountId","string(35)","Да","Идентификатор счёта из GET /accounts"]],fields:ACC_FIELDS,codes:"200 · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500 · 503",
+       note:"Ответ имеет ту же структуру, что и GET /accounts, с одним счётом в массиве account."}
     ]},
-    {id:"g-balances",name:"Балансы",desc:"Ресурс balances (СПР, п. 54). Для счёта может вернуться несколько балансов разного типа; у доступного баланса бывает блок creditLine.",eps:[
-      {m:"GET",p:"/balances",s:"Балансы по всем счетам согласия",st:"ok",uc:"UC7",perm:["ReadBalances"],h:["auth","iid","consent","adate","ip","ua"],
-       resp:`{
-  "data": {
-    "balance": [{
-      "accountId": "BY32BELB3014103XBF0010226000",
-      "creditDebitIndicator": "Credit",
-      "type": "InterimAvailable",
-      "dateTime": "2026-10-13T22:00:00+03:00",
-      "amount": { "amount": "417.45", "currency": "BYN" },
-      "amountByn": "417.45",
-      "creditLine": [{ "included": false, "type": "Available",
-                       "amount": { "amount": "0.00", "currency": "BYN" } }]
-    }]
-  }
-}`,codes:"200, 401, 403"},
-      {m:"GET",p:"/accounts/{accountId}/balances",s:"Баланс по конкретному счёту",st:"ok",uc:"UC7",perm:["ReadBalances"],h:["auth","iid","consent"],
-       path:[["accountId","string(35)","Да","Идентификатор счёта (IBAN)"]],codes:"200, 401, 403, 404",
-       note:"Ответ такой же, как у GET /balances, но по одному счёту. Тип баланса — по справочнику E072."}
+    {id:"g-balances",name:"Балансы",desc:"Тег Balances. Для счёта может вернуться несколько балансов разного типа; у доступного баланса бывает несколько блоков creditLine.",eps:[
+      {m:"GET",p:"/balances",s:"Получение информации о балансе счетов",st:"ok",op:"getBalances",perm:["ReadBalances"],h:["auth","apikey","iid","acons","adate","ip","ua"],
+       query:PAGE,resp:exBalances,
+       fields:[["type","Тип баланса по справочнику E072: OPAV, OPBD, ITAV, ITBD, CLAV, CLBD, FWAV, PRCD, XPCD, INFO"],["creditDebitIndicator","Credit или Debit; нулевой баланс считается кредитовым"],["balanceEquivalentAmount","Сумма в эквиваленте в белорусских рублях"],["creditLine[]","included — входит ли кредит в баланс, type — Revolving или Non-revolving, creditLineAmount"]],
+       codes:"200 · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500 · 503"},
+      {m:"GET",p:"/accounts/{accountId}/balances",s:"Получение информации о балансе счёта",st:"ok",op:"getBalanceByAccountId",perm:["ReadBalances"],h:["auth","apikey","iid","acons","adate","ip","ua"],
+       path:[["accountId","string(35)","Да","Идентификатор счёта"]],codes:"200 · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500 · 503",
+       note:"Ответ такой же, как у GET /balances, но по одному счёту."}
     ]},
-    {id:"g-transactions",name:"Транзакции",desc:"Ресурс transactions (СПР, п. 56). Работает в два шага: сначала создаётся перечень за период, затем он запрашивается по идентификатору.",eps:[
-      {m:"POST",p:"/accounts/{accountId}/transactions",s:"Создание перечня транзакций за период",st:"uos",uc:"UC8",perm:["ReadTransactionsBasic или Detail","+ ReadTransactionsCredits и/или Debits"],h:["auth","iid","idem","ct"],
-       path:[["accountId","string(35)","Да","IBAN счёта"]],
-       body:[["fromBookingDateTime","datetime","Да","Начало периода по дате отражения операции, YYYY-MM-DDThh:mm:ss±hh:mm"],["toBookingDateTime","datetime","Да","Конец периода"]],
-       resp:`{
-  "data": {
-    "transactionList": {
-      "transactionListId": "tl-7c1e…",
-      "accountId": "BY32BELB3014103XBF0010226000",
-      "fromBookingDateTime": "2026-09-01T00:00:00+03:00",
-      "toBookingDateTime": "2026-09-30T23:59:59+03:00"
-    }
-  }
-}`,codes:"201, 400, 401, 403"},
-      {m:"GET",p:"/accounts/{accountId}/transactions/{transactionListId}",s:"Получение перечня транзакций по идентификатору",st:"uos",uc:"UC9",perm:["ReadTransactionsBasic или Detail","+ ReadTransactionsCredits и/или Debits"],h:["auth","iid"],
-       path:[["accountId","string(35)","Да","IBAN счёта"],["transactionListId","string","Да","Идентификатор из ответа на POST"]],
-       fields:[["transactionId, transactionReference","Идентификатор и референс транзакции"],["creditDebitIndicator, status","Дебет/кредит; статус по справочнику N010"],["bookingDateTime, valueDateTime","Дата отражения и дата валютирования"],["amount, charge, currencyExchange","Сумма, комиссия, данные конвертации"],["debtor / creditor","Плательщик и бенефициар: наименование, идентификация, адрес, счёт, банк"],["cardInstrument","Данные карты, если операция по карте"]],
-       codes:"200, 401, 403, 404",note:"Формат ответа — СПР 6.02-1-2022, стр. 80."}
+    {id:"g-transactions",name:"Транзакции",desc:"Тег Transactions. Работает в два шага: сначала создаётся перечень за период, затем он запрашивается по идентификатору.",eps:[
+      {m:"POST",p:"/accounts/{accountId}/transactions",s:"Создание перечня транзакций по счёту",st:"uos",op:"createTransactionsByAccountId",perm:["ReadTransactionsBasic или Detail","+ ReadTransactionsCredits и/или Debits"],h:["auth","apikey","iid","idem","ct","acons","adate","ip","ua"],
+       path:[["accountId","string(35)","Да","Идентификатор счёта"]],
+       body:[["data.transaction.fromBookingDateTime","date-time","Да","Начало периода по дате отражения операции"],["data.transaction.toBookingDateTime","date-time","Да","Конец периода"]],
+       req:exTrReq,resp:exTrCreated,codes:"201 Created · 400 · 401 · 403 · 404 · 405 · 406 · 415 · 429 · 500 · 503"},
+      {m:"GET",p:"/accounts/{accountId}/transactions/{transactionListId}",s:"Получение перечня транзакций по идентификатору",st:"uos",op:"getTransactions",perm:["ReadTransactionsBasic или Detail","+ ReadTransactionsCredits и/или Debits"],h:["auth","apikey","iid","acons","adate","ip","ua"],
+       path:[["accountId","string(35)","Да","Идентификатор счёта"],["transactionListId","string(35)","Да","Идентификатор из ответа на POST"]],query:PAGE,resp:exTrList,
+       fields:[["transactionId, transactionReference","Идентификатор и референс транзакции"],["creditDebitIndicator, status","Credit/Debit; статус по справочнику N010, обычно Z00"],["bookingDateTime, valueDate","Дата отражения и дата валютирования"],["amount, chargeAmount","Сумма и комиссия"],["currencyExchange","Конвертация: валюты, курс, номер валютного договора, исходная сумма"],["balance","Остаток по счёту после операции"],["merchantDetails","Продавец и его MCC, для карточных операций"],["debtor… / creditor…","Плательщик и получатель: наименование, УНП или документ, адрес, контакты, счёт и банк"],["cardInstrument","Платёжная система (BelCard, VISA, MasterCard, Mir…), тип авторизации, владелец и номер карты"]],
+       codes:"200 · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500 · 503"}
     ]},
-    {id:"g-statements",name:"Выписки",desc:"Ресурс statements (СПР, п. 55). Как и транзакции, работает в два шага.",eps:[
-      {m:"POST",p:"/statements/{accountId}",s:"Создание выписки за период",st:"uos",uc:"UC10",perm:["ReadStatementsBasic","ReadStatementsDetail"],h:["auth","iid","idem","ct"],
-       path:[["accountId","string(35)","Да","IBAN счёта"]],
-       body:[["fromBookingDate","date","Да","Начало периода, YYYY-MM-DD, включительно"],["toBookingDate","date","Да","Конец периода, включительно"]],
-       resp:`{
-  "data": {
-    "statement": [{
-      "statementId": "st-91af…",
-      "accountId": "BY32BELB3014103XBF0010226000",
-      "fromBookingDate": "2026-09-01",
-      "toBookingDate": "2026-09-30"
-    }]
-  }
-}`,codes:"201, 400, 401, 403"},
-      {m:"GET",p:"/accounts/{accountId}/statements/{statementId}",s:"Получение выписки по идентификатору",st:"uos",uc:"UC11",perm:["ReadStatementsBasic","ReadStatementsDetail"],h:["auth","iid"],
-       path:[["accountId","string(35)","Да","IBAN счёта"],["statementId","string","Да","Идентификатор из ответа на POST"]],
-       fields:[["openingBalance","Входящий остаток: сумма, валюта, эквивалент в BYN"],["closingBalance","Исходящий остаток: сумма, валюта, эквивалент в BYN"],["transaction[]","Операции: номер платёжной инструкции, даты, назначение, сумма, плательщик, бенефициар"]],
-       codes:"200, 401, 403, 404",note:"Формат ответа — СПР 6.02-1-2022, стр. 64."}
+    {id:"g-statements",name:"Выписки",desc:"Тег Statements. Как и транзакции, работает в два шага. Пока выписка формируется, GET возвращает ошибку BY.NBRB.Resource.NotCreated.",eps:[
+      {m:"POST",p:"/statements/{accountId}",s:"Создание выписки по счёту",st:"uos",op:"createStatementByAccountId",perm:["ReadStatementsBasic","ReadStatementsDetail"],h:["auth","apikey","iid","idem","ct","acons","adate","ip","ua"],
+       path:[["accountId","string(35)","Да","Идентификатор счёта"]],
+       body:[["data.statement.fromBookingDate","date","Да","Начало периода включительно, YYYY-MM-DD"],["data.statement.toBookingDate","date","Да","Конец периода включительно"]],
+       req:exStReq,resp:exStCreated,codes:"201 Created · 400 · 401 · 403 · 404 · 405 · 406 · 415 · 429 · 500 · 503"},
+      {m:"GET",p:"/accounts/{accountId}/statements/{statementId}",s:"Получение выписки по идентификатору",st:"uos",op:"getStatement",perm:["ReadStatementsBasic","ReadStatementsDetail"],h:["auth","apikey","iid","acons","adate","ip","ua"],
+       path:[["accountId","string(35)","Да","Идентификатор счёта"],["statementId","string(35)","Да","Идентификатор из ответа на POST"]],query:PAGE,resp:exSt,
+       fields:[["openingAvailableBalance","Входящий остаток: сумма, валюта, эквивалент в BYN"],["closingAvailableBalance","Исходящий остаток: сумма, валюта, эквивалент в BYN"],["transaction[].number","Номер платёжной инструкции"],["transaction[]","Даты, назначение, сумма и эквивалент в BYN, плательщик, бенефициар"]],
+       codes:"200 · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500 · 503"}
     ]}
   ],
-  perms:[["ReadAccountsBasic","/accounts, /accounts/{accountId}","Основная информация о счетах"],["ReadAccountsDetail","/accounts, /accounts/{accountId}","Детальная информация, включая accountDetails и debtorAgent"],["ReadBalances","/balances, /accounts/{accountId}/balances","Балансы"],["ReadStatementsBasic","/statements, /accounts/{accountId}/statements/{statementId}","Основная информация о выписке"],["ReadStatementsDetail","то же","Детальная информация о выписке"],["ReadTransactionsBasic","/accounts/{accountId}/transactions/{transactionListId}","Основная информация о транзакциях. Требует Credits и/или Debits"],["ReadTransactionsDetail","то же","Детальная информация о транзакциях. Требует Credits и/или Debits"],["ReadTransactionsCredits","то же","Только кредитовые транзакции"],["ReadTransactionsDebits","то же","Только дебетовые транзакции"]],
-  statuses:[["AwaitingAuthorisation","Создано, ждёт авторизации клиентом"],["Authorised","Клиент авторизовал согласие"],["Rejected","Клиент отклонил согласие"],["Revoked","Клиент отозвал согласие"],["Expired","Истёк срок действия"]]
+  perms:[["ReadAccountsBasic","/accounts, /accounts/{accountId}","Основная информация о счетах"],["ReadAccountsDetail","/accounts, /accounts/{accountId}","Детальная информация, включая accountDetails и debtorAgent; Basic даётся автоматически"],["ReadBalances","/balances, /accounts/{accountId}/balances","Балансы"],["ReadStatementsBasic","/statements, /accounts/{accountId}/statements/{statementId}","Основная информация о выписке"],["ReadStatementsDetail","то же","Детальная информация о выписке"],["ReadTransactionsBasic","/accounts/{accountId}/transactions/…","Основная информация о транзакциях. Требует Credits и/или Debits"],["ReadTransactionsDetail","то же","Детальная информация о транзакциях. Требует Credits и/или Debits"],["ReadTransactionsCredits","то же","Только кредитовые транзакции. Требует Basic или Detail"],["ReadTransactionsDebits","то же","Только дебетовые транзакции. Требует Basic или Detail"]],
+  statuses:[["AwaitingAuthorisation","Создано, ждёт авторизации клиентом"],["Authorised","Клиент авторизовал согласие"],["Rejected","Клиент отклонил согласие"],["Revoked","Клиент отозвал согласие"],["Expired","Истёк срок действия"]],
+  issues:[
+    ["DELETE /accountConsents/{id}","Swagger возвращает 204 без тела. Во внутреннем описании UC12 указан ответ 200 с атрибутами согласия."],
+    ["accountId","В примерах swagger это внутренний идентификатор (12345TEST, 99365), во внутреннем описании UC9 и UC11 — IBAN. Формат нужно зафиксировать."],
+    ["Статус Revoked","В swagger описан как «было отклонено клиентом», так же как Rejected. Правильно: «отозвано клиентом»."],
+    ["Authorization","Заголовок помечен как необязательный; securitySchemes объявляет OAuth 2.0 implicit flow."]
+  ]
 };
+
+/* ---------- Платежи ---------- */
+const exPayConsentReq = `{
+  "data": {
+    "initiation": {
+      "instructionIdentification": "795ABSB201906250257520000926100",
+      "endToEndIdentification": "01.20261013.693.1",
+      "amount": "2800.00",
+      "currency": "BYN",
+      "requestedExecutionDate": "2026-10-14",
+      "debtorAccount": { "schemeName": "BY.NBRB.IBAN", "identification": "BY00BELB30120000000000000000" },
+      "creditor": {
+        "name": "ООО «Поставщик»",
+        "organisationIdentification": [{ "code": "TXID", "identification": "INN200025739" }]
+      },
+      "creditorAccount": { "schemeName": "BY.NBRB.IBAN", "identification": "BY00XXXX30120000000000000000" },
+      "remittanceInformation": {
+        "categoryPurposeCode": "SUPP",
+        "proprietaryPurpose": "130110.22",
+        "unstructured": "Оплата по счету №45 от 10.09.2026"
+      }
+    },
+    "authorisation": { "authorisationType": "Single" }
+  },
+  "risk": { "paymentContextCode": "10510", "merchantCategoryCode": "5967" }
+}`;
+const exPayConsentResp = (idn, st) => `{
+  "data": {
+    "${idn}": "3cgfc598-r5gh-9758-b358-587a5479610",
+    "link": "https://sdbo.bank.by/${idn}/3cgfc598-r5gh-9758-b358-587a5479610/",
+    "creationDateTime": "2026-10-13T10:00:00+03:00",
+    "status": "${st}",
+    "statusUpdateDateTime": "2026-10-13T10:00:00+03:00",
+    "cutOffDateTime": "2026-10-14T17:00:00+03:00",
+    "expectedExecutionDate": "2026-10-14",
+    "expectedSettlementDate": "2026-10-14",
+    "initiation": { "…": "как в запросе" },
+    "authorisation": { "authorisationType": "Single" },
+    "charge": [{ "chargeBearer": "DEBT", "type": "COMM", "chargeAmount": "2.00", "currency": "BYN" }]
+  }
+}`;
+const exPayResp = (pid, cid, code) => `{
+  "data": {
+    "${pid}": "9856278",
+    "${cid}": "3cgfc598-r5gh-9758-b358-587a5479610",
+    "creationDateTime": "2026-10-14T09:00:00+03:00",
+    "expectedExecutionDate": "2026-10-14",
+    "expectedSettlementDate": "2026-10-14",
+    "initiation": {
+      "…": "как в согласии",
+      "supplementaryData": { "signLink": "https://sdbo.bank.by/sign/9856278" }
+    },
+    "multiauthorisation": {
+      "status": "AwaitingFurtherAuthorisation",
+      "numberRequired": 2, "numberReceived": 1,
+      "expirationDateTime": "2026-10-14T17:00:00+03:00"
+    },
+    "charge": [{ "chargeBearer": "DEBT", "type": "COMM", "chargeAmount": "2.00", "currency": "BYN" }],
+    "paymentStatus": { "paymentStatus": "${code}", "statusUpdateDateTime": "2026-10-14T09:00:05+03:00" }
+  }
+}`;
+const exListAcc = `{
+  "data": {
+    "initiation": {
+      "instructionIdentification": "…", "endToEndIdentification": "…",
+      "amount": "2798.00", "currency": "BYN",
+      "creditor": { "name": "ООО «Работодатель»" },
+      "listAccounts": [
+        { "name": "ИВАНОВ ИВАН ИВАНОВИЧ", "iban": "BY00BELB30140000000000000000", "amount": "1450.00" },
+        { "name": "ПЕТРОВА АННА СЕРГЕЕВНА", "iban": "BY00BELB30140000000000000001", "amount": "1348.00" }
+      ],
+      "remittanceInformation": { "categoryPurposeCode": "SALA", "proprietaryPurpose": "…" },
+      "supplementaryData": {
+        "salaryContract": { "contractNum": "17/2024", "contractDate": "2024-03-01" },
+        "salaryInfo": { "spisokType": "2", "vidDohoda": "11", "period": "Сентябрь 2026" },
+        "obligationsInfo": { "pn": "0", "sv": "0", "pv": "0" }
+      }
+    }
+  }
+}`;
+const exListPass = `{
+  "data": {
+    "initiation": {
+      "…": "общие поля initiation",
+      "listPassportData": [
+        { "name": "ИВАНОВ ИВАН ИВАНОВИЧ", "identification": "06.20150901.MP0000000",
+          "issuer": "РОВД", "amount": "1450.00" }
+      ]
+    }
+  }
+}`;
+const exTax = `{
+  "data": {
+    "initiation": {
+      "…": "общие поля initiation",
+      "taxRemittance": {
+        "category": "10202",
+        "debtor": { "taxIdentification": "INN191767195" },
+        "creditor": { "taxIdentification": "INN100000000" },
+        "type": "MM09",
+        "year": "2026-01-01",
+        "totalAmount": "15556.00"
+      }
+    }
+  }
+}`;
+const exVRP = `{
+  "data": {
+    "controlParameters": {
+      "fromPaymentDate": "2026-11-01",
+      "toPaymentDate": "2027-10-31",
+      "maximumIndividualAmount": "50.00",
+      "currency": "BYN",
+      "periodicLimits": [{ "amount": "100.00", "currency": "BYN", "periodType": "Month" }]
+    },
+    "initiation": {
+      "debtorAccount": { "schemeName": "BY.NBRB.IBAN", "identification": "BY00BELB30120000000000000000" },
+      "creditor": { "name": "ООО «Сервис»" },
+      "creditorAccount": { "schemeName": "BY.NBRB.IBAN", "identification": "BY00XXXX30120000000000000000" }
+    }
+  },
+  "risk": { "paymentContextCode": "10510" }
+}`;
+
+const R = (f,t,o,d) => [f,t,o,d];
+function initRows(o={}){
+  const rows=[
+    R("data.initiation.instructionIdentification","string(35)","Да","Уникальный идентификатор платёжной инструкции"),
+    R("data.initiation.endToEndIdentification","string(35)","Да","Сквозной идентификатор NN.YYYYMMDD.номер; NN — вид документа по N016"),
+    R("data.initiation.amount, currency","string","Да","Сумма и валюта (BYN)"),
+    R("data.initiation.requestedExecutionDate","date","Нет","Дата списания со счёта плательщика"),
+    R("data.initiation.debtor, debtorAccount","object",o.debtorReq?"Да":"Нет","Плательщик и его счёт (schemeName BY.NBRB.IBAN, identification)"),
+    R("data.initiation.creditor","object","Да","Получатель: name, organisationIdentification (TXID — УНП), адрес, контакты"),
+    R("data.initiation.creditorAccount","object",o.noCredAcc?"Нет":"Да","Счёт получателя")
+  ];
+  (o.extra||[]).forEach(r=>rows.push(r));
+  rows.push(R("data.initiation.remittanceInformation","object","Нет","categoryPurposeCode (E004), proprietaryPurpose — признак, код назначения N099 и очерёдность N034, unstructured — назначение"));
+  rows.push(R("data.authorisation","object","Нет","authorisationType: Any, Single или Multiple; competitionDateTime — срок авторизации"));
+  if(o.risk) rows.push(R("risk","object","Да","paymentContextCode (N099), merchantCategoryCode (ISO 18245), merchantCustomerIdentification, postalAddress"));
+  return rows;
+}
+const FILE_ROW = R("data.initiation.enclosedFile[]","array","Нет","До 2 приложенных документов: name, identification (N101), format, fileName, issueDate, enclosure до 10 МБ");
+const TAX_ROW = R("data.initiation.taxRemittance","object","Нет","Бюджетные реквизиты: category (N085+N011), налоговые номера плательщика и получателя, type — период MM01…HLF2, year, totalAmount");
+
+const CONSENT_FIELDS=[["status","Статус согласия, см. раздел «Статусы согласия»"],["link","Ссылка, по которой клиент авторизует согласие в банке"],["cutOffDateTime","Время, до которого работает платёжная система"],["expectedExecutionDate, expectedSettlementDate","Ожидаемые даты списания и зачисления"],["charge[]","Комиссия: chargeBearer (N100: DEBT, CRED, SHAR, SLEV), type (E026), chargeAmount"]];
+const PAY_FIELDS=[["paymentStatus.paymentStatus","Код статуса по справочнику E065, см. раздел «Статусы платёжного указания»"],["paymentStatus.statusReasonInformation","Код причины отказа или отзыва по E066 (например, CUST, DUPL, AM09) и пояснение"],["initiation.supplementaryData.signLink","Ссылка, по которой клиент подписывает платёжное указание"],["multiauthorisation","Множественная подпись: status, numberRequired, numberReceived, expirationDateTime"]];
+const PCODES="201 Created · 400 · 401 · 403 · 404 · 405 · 406 · 415 · 429 · 500";
+const GCODES="200 · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500";
+const DCODES="204 No Content · 400 · 401 · 403 · 404 · 405 · 406 · 429 · 500";
+const PH=["auth","apikey","iid","idem","ct","adate","ip","ua"], GH=["auth","apikey","iid","adate","ip","ua"];
+
+function payGroup(c){
+  const ch=[c.cid,"Идентификатор авторизованного согласия, присвоенный банком","Да"];
+  const eps=[
+    {m:"POST",p:`/paymentConsents/${c.cres}`,s:"Создание согласия",st:"test",h:PH,body:c.cbody,req:c.creq,resp:c.cresp||exPayConsentResp(c.cid,"AwaitingAuthorisation"),fields:CONSENT_FIELDS,codes:PCODES},
+    {m:"GET",p:`/paymentConsents/${c.cres}/{${c.cid}}`,s:"Получение статуса согласия",st:"test",h:GH,path:[[c.cid,"string(35)","Да","Идентификатор согласия"]],codes:GCODES}
+  ];
+  if(c.cdel) eps.push({m:"DELETE",p:`/paymentConsents/${c.cres}/{${c.cid}}`,s:"Отзыв (удаление) долгосрочного согласия",st:"test",h:GH,path:[[c.cid,"string(35)","Да","Идентификатор согласия"]],codes:DCODES});
+  eps.push(
+    {m:"POST",p:`/payments/${c.pres}`,s:"Создание платёжного указания",st:"test",h:[ch,...PH],
+     body:c.pbody||[R("data."+c.cid,"string(35)","Да","Идентификатор авторизованного согласия"),R("data.initiation","object","Да","Те же параметры, что в согласии; расхождение даёт ошибку BY.NBRB.Resource.ConsentMismatch")].concat(c.risk?[R("risk","object","Да","Те же параметры риска, что в согласии")]:[]),
+     resp:exPayResp(c.pid,c.cid,"ACTC"),fields:PAY_FIELDS,codes:PCODES},
+    {m:"GET",p:`/payments/${c.pres}/{${c.pid}}`,s:"Получение статуса платёжного указания",st:"test",h:[ch,...GH],path:[[c.pid,"string(35)","Да","Идентификатор платёжного указания"]],fields:PAY_FIELDS.slice(0,2),codes:c.gcodes||GCODES},
+    {m:"DELETE",p:`/payments/${c.pres}/{${c.pid}}`,s:"Отзыв платёжного указания",st:"test",h:GH,path:[[c.pid,"string(35)","Да","Идентификатор платёжного указания"]],codes:DCODES,note:"Если указание уже нельзя отозвать, банк вернёт ошибку BY.NBRB.Resource.NotCancel."}
+  );
+  (TXT[c.id]||[]).forEach((t,i)=>{if(eps[i]) eps[i].d=t});
+  return {id:c.id,name:c.name,desc:c.desc,eps};
+}
 
 const DESC={
  "POST /accountConsents":["Регистрирует в банке запрос на доступ к данным клиента: какие сведения нужны, до какой даты действует доступ и за какой период нужны операции. В ответе приходят идентификатор согласия и ссылка, по которой клиент подтверждает доступ в банке.","С этого вызова начинается любой сценарий с данными клиента. Приложение запрашивает ровно тот объём данных, который нужен продукту, а клиент видит понятные условия. Это повышает доверие и долю клиентов, которые доводят подключение до конца."],
  "GET /accountConsents/{accountConsentId}":["Возвращает текущий статус согласия и его параметры: разрешения, срок действия и период транзакций.","Приложение узнаёт, что клиент подтвердил доступ, и сразу показывает ему счета. По сроку действия можно заранее предложить клиенту продлить доступ, чтобы синхронизация не прервалась."],
  "DELETE /accountConsents/{accountConsentId}":["Отзывает согласие по просьбе клиента, сделанной в вашем приложении. Банк переводит согласие в статус Revoked и перестаёт отдавать по нему данные; история согласия сохраняется.","Клиент полностью управляет доступом к своим данным, а требование стандарта об отзыве доступа выполнено. Для партнёра это корректное отключение клиента без обращения в банк."],
- "GET /accounts":["Возвращает все счета, которые клиент открыл приложению при авторизации согласия: IBAN, валюту, тип и вид счёта, статус и дату открытия.","На этом строятся мультибанкинг и учётные системы. Клиенту не нужно вручную вводить реквизиты: приложение сразу получает список счетов и привязывает их к учёту."],
- "GET /accounts/{accountId}":["Возвращает подробные сведения по одному счёту: наименование, обслуживающий банк и детализированный статус, например признак ареста.","Ограничения по счёту видны вовремя, и приложение не отправит платёж с заблокированного счёта. Метод также удобен для проверки реквизитов перед сверкой или выставлением документов."],
+ "GET /accounts":["Возвращает все счета, которые клиент открыл приложению при авторизации согласия: идентификатор и IBAN, валюту, тип и вид счёта, статус и дату открытия.","На этом строятся мультибанкинг и учётные системы. Клиенту не нужно вручную вводить реквизиты: приложение сразу получает список счетов и привязывает их к учёту."],
+ "GET /accounts/{accountId}":["Возвращает подробные сведения по одному счёту: наименование, обслуживающий банк и детализированный статус, например арест или блокировку с указанием причины.","Ограничения по счёту видны вовремя, и приложение не отправит платёж с заблокированного счёта. Метод также удобен для проверки реквизитов перед сверкой или выставлением документов."],
  "GET /balances":["Одним запросом возвращает остатки по всем счетам согласия в валюте счёта и в эквиваленте в белорусских рублях, с учётом кредитных линий.","Видна вся ликвидность клиента на текущий момент: руководитель или бухгалтер знает, сколько денег доступно на всех счетах, не заходя в интернет-банк."],
  "GET /accounts/{accountId}/balances":["Возвращает остаток по выбранному счёту, включая доступный баланс и сведения о кредитной линии.","Перед платежом приложение проверяет, хватает ли средств. Метод подходит и для виджетов с одним счётом и запрашивает меньше данных, чем запрос всех балансов."],
  "POST /accounts/{accountId}/transactions":["Формирует на стороне банка перечень операций по счёту за указанный период по дате отражения. В ответе приходит идентификатор перечня, по которому затем забираются сами операции.","Благодаря двум шагам банк готовит большой объём операций без таймаутов. Партнёр запрашивает только нужный период, например операции с момента прошлой синхронизации."],
  "GET /accounts/{accountId}/transactions/{transactionListId}":["Возвращает сформированный перечень операций: суммы, даты отражения и валютирования, назначение платежа, комиссии, данные плательщика и бенефициара, сведения о конвертации и карте.","Поступления и списания разносятся по контрагентам автоматически, оплата счетов сверяется без участия бухгалтера, по операциям строится аналитика расходов. Ручная загрузка выписок в учётную систему больше не нужна."],
  "POST /statements/{accountId}":["Создаёт выписку по счёту за период, даты начала и окончания включаются. В ответе приходит идентификатор выписки, по которому её затем получают.","Партнёр получает документ банка за закрытый период, например за месяц или квартал, и использует его в бухгалтерском учёте и отчётности."],
  "GET /accounts/{accountId}/statements/{statementId}":["Возвращает выписку с входящим и исходящим остатком и всеми операциями за период, с суммами в валюте счёта и в эквиваленте в BYN.","По остаткам на начало и конец периода видно, что выписка полная, и обороты легко сверить с учётом. Выписка подходит для закрытия периода, заполнения КУДИР и отчётности без запроса в отделении."],
- "GET /paymentConsents?fromCreationDate=&toCreationDate=&type=&status=":["Возвращает все согласия клиента на платежи, созданные за период, с фильтрами по типу и статусу.","Клиент и партнёр видят единый реестр разрешений: что подтверждено, что ждёт подтверждения, что уже использовано. Реестр нужен для экрана управления доступами и для аудита."],
- "GET /payments?fromCreationDate=&toCreationDate=&type=&status=":["Возвращает все платёжные указания клиента, созданные за период, с фильтрами по типу и статусу.","Из ответа строится журнал платежей в приложении, и его можно сверить с учётом, не запрашивая статус каждого платежа по отдельности."]
+ "GET /paymentConsents":["Возвращает все согласия клиента на платежи, созданные за период, с фильтрами по типу и статусу.","Клиент и партнёр видят единый реестр разрешений: что подтверждено, что ждёт подтверждения, что уже использовано. Реестр нужен для экрана управления доступами и для аудита."],
+ "GET /payments":["Возвращает все платёжные указания клиента, созданные за период, с фильтрами по типу и статусу.","Из ответа строится журнал платежей в приложении, и его можно сверить с учётом, не запрашивая статус каждого платежа по отдельности."]
 };
 const TXT={
  "p-domestic":[
-  ["Фиксирует параметры разового платежа за товары, работы или услуги: сумму, получателя и назначение. Банк возвращает ссылку, по которой клиент подтверждает платёж.","Клиент оплачивает заказ или счёт поставщика прямо в вашем приложении со своего счёта, без ввода карты и переноса реквизитов в интернет-банк. Продавец теряет меньше брошенных корзин и не платит комиссию за эквайринг."],
+  ["Фиксирует параметры разового платёжного поручения в белорусских рублях: сумму, получателя и назначение. Банк возвращает ссылку, по которой клиент подтверждает платёж.","Клиент оплачивает заказ или счёт поставщика прямо в вашем приложении со своего счёта, без ввода карты и переноса реквизитов в интернет-банк. Продавец теряет меньше брошенных корзин и не платит комиссию за эквайринг."],
   ["Возвращает статус согласия и ожидаемые даты исполнения и зачисления платежа.","Приложение сразу узнаёт, что клиент подтвердил оплату, и продолжает оформление заказа. По ожидаемой дате зачисления покупателю можно назвать точные сроки."],
-  ["Отправляет платёжное указание в банк по авторизованному согласию. После этого разовое согласие переходит в статус Consumed.","Этот вызов запускает списание денег. Момент отправки выбирает партнёр, например после резервирования товара на складе."],
-  ["Возвращает текущий статус платёжного указания в банке.","Оплата заказа подтверждается автоматически, и товар можно отправлять без ручной сверки поступлений."],
+  ["Отправляет платёжное указание в банк по авторизованному согласию. После этого разовое согласие переходит в статус Consumed. В ответе приходит ссылка для подписания указания клиентом.","Этот вызов запускает списание денег. Момент отправки выбирает партнёр, например после резервирования товара на складе."],
+  ["Возвращает текущий статус платёжного указания в банке по справочнику E065.","Оплата заказа подтверждается автоматически, и товар можно отправлять без ручной сверки поступлений."],
   ["Отзывает платёжное указание, пока банк его не исполнил.","Возвратов становится меньше: если заказ отменён до исполнения, деньги со счёта клиента не уходят."]],
  "p-tax":[
-  ["Фиксирует параметры платежа в бюджет: сумму, бюджетные реквизиты, код платежа и назначение. Клиент подтверждает платёж в банке по полученной ссылке.","Бухгалтерский сервис сам готовит налоговую платёжку с правильными реквизитами, клиенту остаётся только подтвердить её. Меньше ошибок в реквизитах и меньше риск пени за неверно оформленный платёж."],
+  ["Фиксирует параметры платежа в бюджет: сумму, бюджетные реквизиты, код платежа, период и назначение. Клиент подтверждает платёж в банке по полученной ссылке.","Бухгалтерский сервис сам готовит налоговую платёжку с правильными реквизитами, клиенту остаётся только подтвердить её. Меньше ошибок в реквизитах и меньше риск пени за неверно оформленный платёж."],
   ["Возвращает статус согласия на платёж в бюджет и ожидаемую дату исполнения.","Видно, подтвердил ли клиент платёж до срока уплаты, и ему можно вовремя напомнить."],
   ["Отправляет авторизованный платёж в бюджет на исполнение.","Партнёр отправляет платёж в нужный день налогового календаря, точно к сроку."],
   ["Возвращает статус исполнения платежа в бюджет.","Подтверждает уплату налога: сервис отражает её в учёте и в налоговом календаре клиента."],
   ["Отзывает платёж в бюджет до его исполнения.","Ошибку в сумме или реквизитах можно исправить до списания денег и не проходить процедуру возврата из бюджета."]],
  "p-listacc":[
-  ["Фиксирует пакет переводов нескольким получателям с указанием их счетов. Клиент подтверждает весь пакет одним действием.","Подходит для зарплатных реестров и выплат подрядчикам и поставщикам: клиент подписывает один пакет вместо десятков отдельных платёжек."],
+  ["Фиксирует пакет переводов физическим лицам с указанием их счетов, например зарплатный реестр по зарплатному договору. Клиент подтверждает весь пакет одним действием.","Подходит для зарплатных реестров и выплат сотрудникам: клиент подписывает один пакет вместо десятков отдельных платёжек."],
   ["Возвращает статус согласия на пакетный платёж и ожидаемые даты исполнения.","Учётная система видит, что реестр подтверждён, и вовремя запускает выплаты."],
-  ["Отправляет пакет переводов на исполнение по авторизованному согласию.","Выплаты сотрудникам и контрагентам уходят из учётной системы автоматически, без выгрузки файлов в интернет-банк."],
+  ["Отправляет пакет переводов на исполнение по авторизованному согласию.","Выплаты сотрудникам уходят из учётной системы автоматически, без выгрузки файлов в интернет-банк."],
   ["Возвращает статус исполнения пакетного платежа.","Подтверждает, что зарплата или выплаты дошли до получателей, и реестр можно закрыть в учёте."],
   ["Отзывает пакетное платёжное указание до исполнения.","Ошибочный реестр можно остановить целиком, пока деньги ещё не списаны."]],
  "p-listpass":[
-  ["Фиксирует пакет переводов получателям без банковского счёта. Получатели определяются по документам, удостоверяющим личность.","Подходит для выплат физическим лицам без счёта: разовых вознаграждений, компенсаций, выплат по договорам подряда."],
+  ["Фиксирует пакет переводов физическим лицам без банковского счёта. Получатели определяются по документам, удостоверяющим личность.","Подходит для выплат физическим лицам без счёта: разовых вознаграждений, компенсаций, выплат по договорам подряда."],
   ["Возвращает статус согласия на пакет переводов без открытия счёта.","Партнёр убеждается, что плательщик подтвердил выплаты, и только потом сообщает получателям, что деньги можно получить."],
   ["Отправляет пакет переводов без открытия счёта на исполнение.","Выплаты запускаются из системы партнёра, плательщику не нужно приходить в банк."],
   ["Возвращает статус исполнения переводов без открытия счёта.","Получателям можно сообщить, что выплата готова, а выданные средства учесть."],
   ["Отзывает пакет переводов без открытия счёта до исполнения.","Защищает от выплат по ошибочным данным получателей."]],
  "p-req":[
-  ["Получатель средств, например продавец или поставщик, создаёт согласие на списание оплаты со счёта клиента за товары, работы или услуги. Клиент подтверждает его в банке.","Поставщик сам инициирует оплату по выставленному требованию, и клиенту не нужно оформлять платёжку. Деньги приходят быстрее, дебиторская задолженность снижается."],
+  ["Получатель средств, например продавец или поставщик, создаёт согласие на платёжное требование с акцептом за товары, работы или услуги. К требованию можно приложить договор или счёт. Клиент подтверждает его в банке.","Поставщик сам инициирует оплату по выставленному требованию, и клиенту не нужно оформлять платёжку. Деньги приходят быстрее, дебиторская задолженность снижается."],
   ["Возвращает статус согласия плательщика на оплату по требованию.","Поставщик видит, что клиент акцептовал требование, и может планировать поступление денег."],
   ["Отправляет платёжное требование на исполнение по авторизованному согласию.","Деньги списываются в согласованный с клиентом срок, бухгалтеру плательщика ничего делать не нужно."],
   ["Возвращает статус исполнения платёжного требования.","После оплаты счёт клиента автоматически закрывается в учёте поставщика."],
   ["Отзывает платёжное требование до исполнения.","Поставщик может отменить требование, если заказ отменён или сумма изменилась."]],
  "p-taxreq":[
-  ["Взыскатель, то есть государственный орган или уполномоченная организация, создаёт согласие на взыскание платежа в бюджет со счёта клиента.","Взыскание обязательных платежей автоматизируется, ручной обработки требований в банке и у взыскателя становится меньше."],
+  ["Взыскатель, то есть государственный орган или уполномоченная организация, создаёт согласие на платёжное требование в бюджет без акцепта. Указываются документ-основание взыскания и орган, который его принял.","Взыскание обязательных платежей автоматизируется, ручной обработки требований в банке и у взыскателя становится меньше."],
   ["Возвращает статус согласия на платёж в бюджет по требованию взыскателя.","Взыскатель видит, подтверждено ли требование, и может планировать поступления в бюджет."],
   ["Отправляет требование взыскателя на исполнение.","Платёж в бюджет проходит без бумажного документооборота между взыскателем и банком."],
   ["Возвращает статус исполнения требования взыскателя.","Подтверждает, что средства поступили в бюджет и задолженность клиента закрыта."],
   ["Отзывает требование взыскателя до исполнения.","Взыскание можно остановить, если задолженность уже погашена другим способом."]],
  "p-vrp":[
-  ["Создаёт долгосрочное согласие на серию платежей с ограничениями, например по сумме и периодичности. Клиент подтверждает его один раз.","На этом строятся подписки, регулярные платежи за услуги и автопополнение. Клиенту не нужно подтверждать каждое списание, а сервис получает предсказуемую выручку."],
+  ["Создаёт долгосрочное согласие на серию платежей с ограничениями: срок действия, максимальная сумма одного платежа и лимиты за день, неделю, месяц, квартал, полгода или год. Клиент подтверждает его один раз.","На этом строятся подписки, регулярные платежи за услуги и автопополнение. Клиенту не нужно подтверждать каждое списание, а сервис получает предсказуемую выручку."],
   ["Возвращает статус долгосрочного согласия и его параметры.","Видно, что подписка активна, и клиента можно заранее предупредить об окончании срока согласия."],
   ["Отзывает долгосрочное согласие, после чего новые платёжные указания по нему не принимаются.","Клиент отключает подписку в один клик в приложении партнёра, и сервису с регулярными списаниями доверяют больше."],
-  ["Создаёт очередное платёжное указание в рамках долгосрочного согласия.","Сервис списывает плату по графику в пределах согласованных лимитов, участие клиента не требуется."],
+  ["Создаёт очередное платёжное указание в рамках долгосрочного согласия. Сумма и получатель передаются в блоке instruction.","Сервис списывает плату по графику в пределах согласованных лимитов, участие клиента не требуется."],
   ["Возвращает статус очередного рекуррентного платежа.","После успешной оплаты услуга продлевается автоматически, а при проблеме со списанием клиент получает уведомление."],
   ["Отзывает очередное платёжное указание до исполнения.","Отдельное списание можно отменить, например на время паузы подписки, не отзывая всё согласие."]]
 };
-function payGroup(id,name,desc,res,consentRes,idName,consentIdName,opts={}){
-  const eps=[
-    {m:"POST",p:`/paymentConsents/${consentRes}`,s:`Создание согласия: ${desc.toLowerCase()}`,st:"spr",h:["auth","iid","idem","ct"],
-     body:[["data.initiation","object","Да","Параметры платежа, табл. 28 СПР"],["risk","object","Да","Параметры риска, табл. 29 СПР"]],
-     resp:`{
-  "data": {
-    "${consentIdName}": "pc-…",
-    "link": "…/paymentConsents/${consentRes}/pc-…",
-    "creationDateTime": "2026-10-13T10:00:00+03:00",
-    "status": "AwaitingAuthorisation",
-    "statusUpdateDateTime": "2026-10-13T10:00:00+03:00",
-    "cutOffDateTime": "2026-10-13T17:00:00+03:00",
-    "expectedExecutionDate": "2026-10-13",
-    "expectedSettlementDate": "2026-10-13",
-    "initiation": { … },
-    "charge": [ … ],
-    "authorisation": { … }
-  },
-  "risk": { … }
-}`,codes:"201, 400, 401, 403"},
-    {m:"GET",p:`/paymentConsents/${consentRes}/{${consentIdName}}`,s:"Статус согласия",st:"spr",h:["auth","iid"],path:[[consentIdName,"string(35)","Да","Идентификатор согласия"]],codes:"200, 401, 404"}
-  ];
-  if(opts.consentDelete) eps.push({m:"DELETE",p:`/paymentConsents/${consentRes}/{${consentIdName}}`,s:"Отзыв долгосрочного согласия",st:"spr",h:["auth","iid"],path:[[consentIdName,"string(35)","Да","Идентификатор согласия"]],codes:"204, 400, 401, 404"});
-  eps.push(
-    {m:"POST",p:`/payments/${res}`,s:"Создание платёжного указания по авторизованному согласию",st:"spr",h:["auth","iid","idem","ct"],
-     body:[["data."+consentIdName,"string","Да","Идентификатор авторизованного согласия"],["data.initiation","object","Да","Те же параметры, что в согласии"],["risk","object","Да","Параметры риска"]],codes:"201, 400, 401, 403"},
-    {m:"GET",p:`/payments/${res}/{${idName}}`,s:"Статус платёжного указания",st:"spr",h:["auth","iid"],path:[[idName,"string(35)","Да","Идентификатор платёжного указания"]],codes:"200, 401, 404"},
-    {m:"DELETE",p:`/payments/${res}/{${idName}}`,s:"Отзыв платёжного указания",st:"spr",h:["auth","iid"],path:[[idName,"string(35)","Да","Идентификатор платёжного указания"]],codes:"204, 400, 401, 404"}
-  );
-  (TXT[id]||[]).forEach((t,i)=>{if(eps[i]) eps[i].d=t});
-  return {id,name,desc,eps};
-}
 
 const PAY = {
-  title:"Платежи", ver:"v1.0 · СПР 6.02-1-2022, глава 14",
-  lead:"Сервис позволяет инициировать платежи от имени клиента: за товары и услуги, в бюджет, пакетные переводы, платежи по требованию бенефициара и рекуррентные платежи. Каждый платёж проходит через согласие, которое клиент авторизует в банке.",
+  key:"payments", title:"Платежи", base:GW+"/payments-info", ver:"Payments_bveb · v1 · СПР 6.02-1-2022",
+  portal:"https://pp-wso2-am.bveb.by/devportal/apis/627e3d5d-e39f-4048-8483-2fcd80731617/test",
+  lead:"API позволяет инициировать платежи клиента в белорусских рублях: платёжные поручения за товары и услуги и в бюджет, зарплатные и другие пакетные переводы, платёжные требования бенефициара и рекуррентные платежи. Каждый платёж проходит через согласие, которое клиент авторизует в банке.",
   features:[
-    ["domestic","Платежи за товары и услуги","Разовый перевод со счёта клиента по инициативе плательщика"],
-    ["domesticTax","Платежи в бюджет","Налоги и обязательные платежи с бюджетными реквизитами"],
-    ["list","Пакетные платежи","Список бенефициаров со счетами или переводы без открытия счёта"],
-    ["VRP","Рекуррентные платежи","Долгосрочное согласие и серия платёжных указаний по нему"]
+    ["domestic · domesticTax","Платёжные поручения","Разовый перевод за товары и услуги или платёж в бюджет с бюджетными реквизитами"],
+    ["listAccounts · listPassports","Пакетные платежи","Зарплатный реестр на счета сотрудников или переводы физлицам без открытия счёта"],
+    ["requirement · taxRequirement","Платёжные требования","Требование поставщика с акцептом или требование взыскателя в бюджет без акцепта"],
+    ["VRP","Рекуррентные платежи","Долгосрочное согласие с лимитами и серия платёжных указаний по нему"]
   ],
   cases:[
     ["Оплата в интернет-магазине","Покупатель платит со своего счёта без ввода карты, магазин сразу видит статус платежа."],
-    ["Зарплатные реестры","Учётная система отправляет пакет переводов сотрудникам одним согласием."],
+    ["Зарплатные реестры","Учётная система отправляет зарплату по зарплатному договору одним пакетом."],
     ["Налоговый календарь","Бухгалтерский сервис готовит платёж в бюджет, клиент только подтверждает его в банке."],
-    ["Подписки","Сервис списывает регулярные платежи по долгосрочному согласию VRP."]
+    ["Подписки","Сервис списывает регулярные платежи по долгосрочному согласию в пределах лимитов."]
   ],
   guide:[
-    ["Получите токен приложения","Тот же механизм, что и для API Счета: client credentials в WSO2.",[["POST","getTokenSystemDev"]]],
-    ["Создайте согласие на платёж","Передайте параметры платежа в блоке initiation и параметры риска. Ресурс выбирается по виду платежа.",[["POST","/paymentConsents/domestic"]]],
-    ["Клиент авторизует согласие","Клиент входит в банк и подтверждает платёж. Согласие получает статус Authorised.",[["GET","/paymentConsents/domestic/{domesticConsentId}"]]],
-    ["Создайте платёжное указание","Отправьте указание с идентификатором авторизованного согласия. Разовое согласие после этого переходит в Consumed.",[["POST","/payments/domestic"]]],
-    ["Отслеживайте статус","Проверяйте статус указания. До исполнения указание можно отозвать.",[["GET","/payments/domestic/{domesticId}"],["DELETE","/payments/domestic/{domesticId}"]]],
-    ["Смотрите все операции клиента","Сводные запросы возвращают все согласия и все указания клиента за период.",[["GET","/paymentConsents?fromCreationDate=&toCreationDate="],["GET","/payments?fromCreationDate=&toCreationDate="]]]
+    ["Подключите приложение","Зарегистрируйте приложение в Dev Portal WSO2 и подпишите его на API Платежи. Авторизация — OAuth 2.0 для Пользователя API второго типа или x-api-key из СДБО для первого типа.",[["GET",AUTH_URL.replace("https://","")]]],
+    ["Создайте согласие на платёж","Передайте параметры платежа в блоке initiation и, для платежей за товары и услуги, параметры риска. Ресурс выбирается по виду платежа.",[["POST","/paymentConsents/domestic"]]],
+    ["Клиент авторизует согласие","Клиент переходит по ссылке link, входит в банк и подтверждает платёж. Согласие получает статус Authorised.",[["GET","/paymentConsents/domestic/{domesticConsentId}"]]],
+    ["Создайте платёжное указание","Отправьте указание с идентификатором согласия в теле и в заголовке. Параметры должны совпадать с согласием. В ответе придёт signLink для подписания указания клиентом; при множественной подписи — блок multiauthorisation.",[["POST","/payments/domestic"]]],
+    ["Отслеживайте статус","Проверяйте статус по справочнику E065: от ACTC (проверки пройдены) до ACSC (списано) или RJCT (отклонено). До исполнения указание можно отозвать.",[["GET","/payments/domestic/{domesticId}"],["DELETE","/payments/domestic/{domesticId}"]]],
+    ["Смотрите все операции клиента","Сводные запросы возвращают все согласия и все указания клиента за период создания, постранично.",[["GET","/paymentConsents?fromCreationDate=&toCreationDate="],["GET","/payments?fromCreationDate=&toCreationDate="]]]
   ],
   groups:[
-    payGroup("p-domestic","Платёж за товары, работы, услуги","Платёж плательщика за товары, работы, услуги","domestic","domestic","domesticId","domesticConsentId"),
-    payGroup("p-tax","Платёж в бюджет","Платёж плательщика в бюджет","domesticTax","domesticTax","domesticTaxId","domesticTaxConsentId"),
-    payGroup("p-listacc","Список бенефициаров со счетами","Платёж со списком бенефициаров с указанием их счетов","listAccounts","listAccounts","listAccountsId","listAccountsConsentId"),
-    payGroup("p-listpass","Список бенефициаров без открытия счёта","Платёж со списком бенефициаров при переводе без открытия счёта","listPassports","listPassports","listPassportsId","listPassportsConsentId"),
-    payGroup("p-req","Требование бенефициара за товары, работы, услуги","Платёж по инициативе бенефициара за товары, работы, услуги","requirement","requirement","requirementId","requirementConsentId"),
-    payGroup("p-taxreq","Требование бенефициара (взыскателя) в бюджет","Платёж по инициативе взыскателя в бюджет","taxRequirements","taxRequirement","taxRequirementId","taxRequirementConsentId"),
-    payGroup("p-vrp","Рекуррентный платёж (VRP)","Долгосрочное согласие на рекуррентный платёж","VRP","VRP","VRPId","VRPConsentId",{consentDelete:true}),
-    {id:"p-all",name:"Сводные запросы",desc:"Все согласия и все платёжные указания клиента (СПР, п. 90, табл. 64).",eps:[
-      {m:"GET",p:"/paymentConsents?fromCreationDate=&toCreationDate=&type=&status=",s:"Все согласия клиента на платежи",st:"spr",h:["auth","iid"],
-       query:[["fromCreationDate","date","Да","Начало периода создания"],["toCreationDate","date","Да","Конец периода создания"],["type","string","Нет","Тип согласия, справочник PaymentConsentStaticType (табл. 78)"],["status","string","Нет","Статус согласия"]],
+    payGroup({id:"p-domestic",name:"Платёж за товары, работы, услуги",desc:"Теги DomesticConsents и DomesticPayments. Платёжное поручение клиента в белорусских рублях на территории Республики Беларусь.",
+      cres:"domestic",pres:"domestic",cid:"domesticConsentId",pid:"domesticId",risk:true,cbody:initRows({risk:true}),creq:exPayConsentReq}),
+    payGroup({id:"p-tax",name:"Платёж в бюджет",desc:"Теги DomesticTaxConsents и DomesticTaxes. Платёжное поручение клиента в бюджет в белорусских рублях.",
+      cres:"domesticTax",pres:"domesticTax",cid:"domesticTaxConsentId",pid:"domesticTaxId",
+      cbody:initRows({extra:[TAX_ROW,R("data.initiation.regulatoryReporting[]","array","Нет","Сведения для регулятора, до 10 записей")]}),creq:exTax}),
+    payGroup({id:"p-listacc",name:"Список бенефициаров со счетами",desc:"Теги ListAccountsConsents и ListAccounts. Платёжное поручение в белорусских рублях со списком счетов физических лиц, например зарплатный реестр.",
+      cres:"listAccounts",pres:"listAccounts",cid:"listAccountsConsentId",pid:"listAccountsId",
+      cbody:initRows({noCredAcc:true,extra:[R("data.initiation.listAccounts[]","array","Да","Получатели: name (ФИО), iban, amount"),R("data.initiation.supplementaryData.salaryContract","object","Да","Зарплатный договор: contractNum, contractDate, tariffPlan"),R("data.initiation.supplementaryData.salaryInfo","object","Да","spisokType — вид списка, vidDohoda — вид выплаты, period, periodStart, periodEnd"),R("data.initiation.supplementaryData.obligationsInfo","object","Нет","Признаки удержаний: pn — подоходный налог, sv — страховые взносы, pv — пенсионные взносы")]}),creq:exListAcc}),
+    payGroup({id:"p-listpass",name:"Список бенефициаров без открытия счёта",desc:"Теги ListPassportsConsents и ListPassports. Платёжное поручение в белорусских рублях со списком физических лиц без открытия счёта.",
+      cres:"listPassports",pres:"listPassports",cid:"listPassportsConsentId",pid:"listPassportsId",
+      cbody:initRows({extra:[R("data.initiation.listPassportData[]","array","Да","Получатели: name, identification (код документа N023.дата выдачи.серия и номер), issuer, amount")]}),creq:exListPass}),
+    payGroup({id:"p-req",name:"Требование бенефициара за товары, работы, услуги",desc:"Теги RequirementConsents и Requirements. Платёжное требование с акцептом в белорусских рублях.",
+      cres:"requirement",pres:"requirement",cid:"requirementConsentId",pid:"requirementId",risk:true,
+      cbody:initRows({debtorReq:true,risk:true,extra:[FILE_ROW]})}),
+    payGroup({id:"p-taxreq",name:"Требование взыскателя в бюджет",desc:"Теги TaxRequirementConsents и TaxRequirements. Платёжное требование в бюджет без акцепта в белорусских рублях.",
+      cres:"taxRequirement",pres:"taxRequirement",cid:"taxRequirementConsentId",pid:"taxRequirementId",
+      cbody:initRows({debtorReq:true,extra:[TAX_ROW,FILE_ROW,R("data.initiation.supplementaryData.typeOperation","string(3)","Да","Код типа операции по N012"),R("data.initiation.supplementaryData.garnishmentRemittance","object","Да","Основание взыскания: codeType (N049), number, date, garnishmentAdmin — орган, принявший документ")]})}),
+    payGroup({id:"p-vrp",name:"Рекуррентный платёж (VRP)",desc:"Теги VRPConsents и VRP. Платёжное поручение в белорусских рублях, которое Пользователь API инициирует с определённой периодичностью по долгосрочному согласию клиента.",
+      cres:"VRP",pres:"VRP",cid:"VRPConsentId",pid:"VRPId",risk:true,cdel:true,gcodes:GCODES+" (в swagger ссылки 403 и 404 перепутаны)",
+      cbody:[R("data.controlParameters.fromPaymentDate, toPaymentDate","date","Нет","Срок действия согласия включительно"),R("data.controlParameters.maximumIndividualAmount","string","Нет","Максимальная сумма одного платежа"),R("data.controlParameters.currency","string(3)","Да","Валюта"),R("data.controlParameters.periodicLimits[]","array","Нет","Лимиты: amount, currency, periodType — Day, Week, Month, Quarter, SemiAnnual, Annual"),R("data.initiation.creditor, creditorAccount","object","Да","Получатель и его счёт"),R("data.initiation.debtor, debtorAccount, amount, remittanceInformation","—","Нет","Плательщик, его счёт, сумма и назначение"),R("risk","object","Да","Параметры риска")],
+      creq:exVRP,
+      pbody:[R("data.VRPConsentId","string(35)","Да","Идентификатор долгосрочного согласия"),R("data.initiation","object","Да","Как в согласии"),R("data.instruction","object","Да","Очередной платёж: instructionIdentification, endToEndIdentification, amount, currency, creditor, creditorAccount, remittanceInformation"),R("risk","object","Да","Как в согласии")]}),
+    {id:"p-all",name:"Сводные запросы",desc:"Тег ListPayments. Все согласия и все платёжные указания клиента за период создания.",eps:[
+      {m:"GET",p:"/paymentConsents",s:"Получение информации по всем согласиям клиента",st:"test",h:GH,
+       query:[["fromCreationDate","date","Да","Начало периода создания, YYYY-MM-DD"],["toCreationDate","date","Да","Конец периода создания"],["type","string","Нет","domesticConsent, domesticTaxConsent, listAccountsConsent, listPassportsConsent, requirementConsent, taxRequirementConsent, VRPConsent"],["status","string","Нет","Статус согласия"],...PAGE],
        resp:`{
   "data": {
-    "paymentConsent": [{
-      "paymentConsentId": "pc-…",
+    "PaymentConsent": [{
+      "paymentConsentId": "3cgfc598-r5gh-9758-b358-587a5479610",
       "creationDateTime": "2026-10-13T10:00:00+03:00",
-      "status": "Authorised",
-      "type": "domestic"
+      "status": "Consumed",
+      "type": "domesticConsent"
     }]
   }
-}`,codes:"200, 400, 401"},
-      {m:"GET",p:"/payments?fromCreationDate=&toCreationDate=&type=&status=",s:"Все платёжные указания клиента",st:"spr",h:["auth","iid"],
-       query:[["fromCreationDate","date","Да","Начало периода создания"],["toCreationDate","date","Да","Конец периода создания"],["type","string","Нет","Тип платёжного указания"],["status","string","Нет","Статус указания"]],codes:"200, 400, 401"}
+}`,codes:GCODES},
+      {m:"GET",p:"/payments",s:"Получение информации по всем платёжным указаниям клиента",st:"test",h:GH,
+       query:[["fromCreationDate","date","Да","Начало периода создания"],["toCreationDate","date","Да","Конец периода создания"],["type","string","Нет","domestic, domesticTax, listAccounts, listPassports, requirement, taxRequirement, VRP"],["status","string","Нет","Статус указания"],...PAGE],
+       resp:`{
+  "data": {
+    "payment": [{
+      "paymentId": "9856278",
+      "creationDateTime": "2026-10-14T09:00:00+03:00",
+      "type": "domestic",
+      "paymentStatus": { "paymentStatus": "ACSC", "statusUpdateDateTime": "2026-10-14T11:20:00+03:00" }
+    }]
+  }
+}`,codes:GCODES}
     ]}
   ],
   perms:null,
-  statuses:[["AwaitingAuthorisation","Согласие ожидает авторизации"],["Authorised","Согласие авторизовано"],["Rejected","Согласие отклонено"],["Consumed","Согласие использовано и больше не применяется. Отзыв через DELETE предусмотрен только для VRP"]]
+  statuses:[["AwaitingAuthorisation","Согласие ожидает авторизации клиентом"],["Authorised","Согласие авторизовано"],["Rejected","Согласие отклонено"],["Consumed","Разовое согласие использовано и больше не применяется"],["Expired","Истёк срок действия"],["Revoked","Долгосрочное согласие VRP отозвано"]],
+  payStatuses:[["ACTC","Аутентификация, синтаксическая и семантическая проверки пройдены"],["ACCP","Проверка профиля клиента пройдена"],["ACSP","Все проверки пройдены, перевод принят к исполнению"],["ACWC","Принято с изменениями, например даты"],["PDNG","Ожидает рассмотрения, будут дальнейшие проверки"],["PART","Часть транзакций принята, остальные ещё нет"],["ACSC","Деньги списаны со счёта плательщика"],["RCVD","Документ получен банком получателя"],["ACCC","Деньги зачислены на счёт бенефициара"],["RJCT","Документ или транзакция отклонены"]],
+  issues:[
+    ["POST /payments/taxRequirement","В swagger путь в единственном числе (taxRequirement), в СПР и в тексте описания самого swagger — taxRequirements. Нужно выбрать один вариант."],
+    ["x-fapi-customer-ipaddress","В Payments_bveb заголовок назван без дефиса, в Accounts_bveb и СПР — x-fapi-customer-ip-address."],
+    ["GET /payments/VRP/{VRPId}","Ответы 403 и 404 ссылаются на описания друг друга."],
+    ["Текст описания swagger","В путях вида GET/paymentСonsents… буква «С» кириллическая, в GET/paymentСonsentslistPassports пропущен «/». Если скопировать путь из описания, запрос не сработает; реальные пути в paths латиницей."]
+  ]
 };
 
 const APIS={accounts:ACC,payments:PAY};
@@ -454,39 +755,42 @@ function review(a){
   return `<h2>Возможности</h2><div class="grid4">${a.features.map(f=>`<div class="tile"><span class="k">${f[0]}</span><h3>${f[1]}</h3><p>${f[2]}</p></div>`).join("")}</div>
   <h2>Примеры использования API ${a.title}</h2><div class="grid4">${a.cases.map(c=>`<div class="tile"><h3>${c[0]}</h3><p>${c[1]}</p></div>`).join("")}</div>
   <h2>Как начать</h2><ol class="steps">
-   <li><h3>Регистрация</h3><p>Зарегистрируйтесь и войдите на портал</p></li>
+   <li><h3>Регистрация</h3><p>Зарегистрируйтесь и войдите в Dev Portal</p></li>
    <li><h3>Приложение</h3><p>Создайте приложение, выберите тип авторизации и укажите Redirect URL, подпишите его на API ${a.title}</p></li>
-   <li><h3>Тестирование</h3><p>Вызывайте API в песочнице по Client ID и Client Secret</p></li>
+   <li><h3>Тестирование</h3><p>Вызывайте API на тестовом шлюзе pp-wso2-gw.bveb.by</p></li>
    <li><h3>Промышленный доступ</h3><p>Подайте заявку; банк свяжется с вами для заключения договора</p></li>
    <li><h3>Интеграция</h3><p>Используйте промышленные ключи приложения в своей системе</p></li></ol>`;
 }
 function guides(a){
   return `<h2>Сценарий интеграции</h2><div class="flow">${a.guide.map((g,i)=>`<div class="fstep"><div class="n">${i+1}</div><div><h3>${g[0]}</h3><p>${g[1]}</p><div class="call">${g[2].map(c=>`<span class="chip"><span class="m ${c[0]}" style="padding:2px 6px">${c[0]}</span>${esc(c[1])}</span>`).join("")}</div></div></div>`).join("")}</div>`;
 }
-function ep(e,gi,ei){
+function ep(e,id,base){
   const [cls,lab]=ST[e.st];
-  const line=`${e.m} ${BASE}${e.p}`;
+  const line=`${e.m} ${base}${e.p}`;
   const d=e.d||DESC[e.m+" "+e.p];
   let b=d?`<div class="desc"><p>${d[0]}</p><p class="val"><b>Ценность для бизнеса.</b> ${d[1]}</p></div>`:"";
   b+=`<div><h4>Строка запроса</h4><div class="req"><span>${esc(line)}</span><button class="copy" type="button" data-copy="${esc(line)}">Копировать</button></div></div>`;
   if(e.perm) b+=`<div><h4>Разрешения</h4>${e.perm.map(p=>`<span class="pill">${p}</span>`).join("")}</div>`;
-  b+=`<div><h4>Заголовки</h4>${table(["Заголовок","Описание","Обяз."],e.h.map(k=>H[k]))}</div>`;
+  b+=`<div><h4>Заголовки</h4>${table(["Заголовок","Описание","Обяз."],e.h.map(k=>Array.isArray(k)?k:H[k]))}</div>`;
   if(e.path) b+=`<div><h4>Параметры пути</h4>${table(["Параметр","Тип","Обяз.","Описание"],e.path)}</div>`;
   if(e.query) b+=`<div><h4>Параметры запроса</h4>${table(["Параметр","Тип","Обяз.","Описание"],e.query)}</div>`;
   if(e.body) b+=`<div><h4>Тело запроса</h4>${table(["Поле","Тип","Обяз.","Описание"],e.body)}</div>`;
+  if(e.req) b+=`<div><h4>Пример запроса</h4><pre>${esc(e.req)}</pre></div>`;
   if(e.fields) b+=`<div><h4>Ключевые поля ответа</h4>${table(["Поле","Описание"],e.fields)}</div>`;
   if(e.resp) b+=`<div><h4>Пример ответа</h4><pre>${esc(e.resp)}</pre></div>`;
   b+=`<div><h4>Коды ответа</h4><span class="note">${e.codes}</span></div>`;
   if(e.note) b+=`<p class="note" style="margin:0">${e.note}</p>`;
-  if(e.uc) b+=`<p class="note" style="margin:0">Юзкейс: ${e.uc}</p>`;
-  return `<details class="ep" id="ep-${gi}-${ei}"><summary><span class="m ${e.m}">${e.m}</span><span><span class="path">${esc(e.p)}</span><span class="sum">${e.s}</span></span><span class="st ${cls}">${lab}</span></summary><div class="epb">${b}</div></details>`;
+  if(e.op) b+=`<p class="note" style="margin:0">operationId: <code>${e.op}</code></p>`;
+  return `<details class="ep" id="${id}"><summary><span class="m ${e.m}">${e.m}</span><span><span class="path">${esc(e.p)}</span><span class="sum">${e.s}</span></span><span class="st ${cls}">${lab}</span></summary><div class="epb">${b}</div></details>`;
 }
-function doc(a,key){
-  const toc=`<b>Начало работы</b><a href="#d-base">Адрес и версия</a><a href="#d-auth">Авторизация</a><a href="#d-headers">Общие заголовки</a>${a.perms?'<a href="#d-perms">Разрешения</a>':''}<a href="#d-status">Статусы согласия</a><a href="#d-err">Ошибки</a><b>Методы</b>${a.groups.map(g=>`<a href="#${g.id}">${g.name}</a>`).join("")}`;
+const ERR_CODES=[["BY.NBRB.Field.Missing / Field.Invalid / Field.InvalidDate / Field.Expected","Нет обязательного поля, неверное значение или дата, не передана пара ключ-значение; путь к полю — в path"],["BY.NBRB.Header.Missing / Header.Invalid","Нет обязательного заголовка или он неверный"],["BY.NBRB.Resource.InvalidFormat","Тело запроса не соответствует схеме метода"],["BY.NBRB.Resource.NotFound","Ресурс с таким идентификатором не существует"],["BY.NBRB.Resource.NotCreated","Ресурс ещё формируется (выписка, перечень транзакций); повторите запрос позже"],["BY.NBRB.Resource.InvalidConsentStatus","Согласие в статусе, который не позволяет выполнить запрос"],["BY.NBRB.Resource.ConsentMismatch","Платёжное указание не совпадает с согласием в initiation или risk"],["BY.NBRB.Resource.NotCancel","Ресурс нельзя отозвать"],["BY.NBRB.Rules.AfterCutOffDateTime","Запрос после cutOffDateTime"],["BY.NBRB.Signature.*","Ошибки подписи x-jws-signature: Missing, Malformed, Invalid, InvalidClaim, MissingClaim"],["BY.NBRB.Unsupported.AccountIdentifier / LocalInstrument","Схема идентификации счёта или localInstrument не поддерживаются"],["BY.NBRB.Reauthenticate","403: нужна повторная аутентификация клиента"],["BY.NBRB.UnexpectedError","500: непредвиденная ошибка на стороне банка"]];
+function doc(a){
+  const extra = a.payStatuses ? '<a href="#d-paystatus">Статусы платёжного указания</a>' : '';
+  const toc=`<b>Начало работы</b><a href="#d-base">Адрес и версия</a><a href="#d-auth">Авторизация</a><a href="#d-headers">Общие заголовки</a><a href="#d-paging">Пагинация</a>${a.perms?'<a href="#d-perms">Разрешения</a>':''}<a href="#d-status">Статусы согласия</a>${extra}<a href="#d-err">Ошибки</a><a href="#d-issues">Замечания к спецификации</a><b>Методы</b>${a.groups.map(g=>`<a href="#${g.id}">${g.name}</a>`).join("")}`;
   const total=a.groups.reduce((n,g)=>n+g.eps.length,0);
-  let main=`<div class="box" id="d-base"><h3>Адрес и версия</h3><dl class="kv"><dt>Тестовый контур</dt><dd><code>${BASE}</code></dd><dt>Swagger</dt><dd><a href="${BASE}/swagger-ui/index.html" target="_blank" rel="noopener">swagger-ui/index.html</a></dd><dt>Стандарт</dt><dd>СПР 6.02-1-2022, СПР 6.02-2-2022</dd><dt>Формат</dt><dd>JSON, UTF-8; даты ISO 8601 (YYYY-MM-DDThh:mm:ss±hh:mm)</dd><dt>Методов</dt><dd>${total}</dd></dl></div>
-  <div class="box" id="d-auth"><h3>Авторизация</h3><p class="note" style="margin-top:0">OAuth 2.0 через WSO2 API Manager. Токен в формате JWT с ограниченным сроком жизни; после истечения запросите новый. WSO2 проверяет сертификат приложения и ограничивает частоту запросов токена.</p>
-   ${table(["Запрос","Назначение","Параметры"],[["POST getTokenSystemDev","Токен Пользователя API","grant_type=client_credentials"],["POST getUserTokenDev","Аутентификация клиента в SSO","username, password, grant_type, scope; в ответе refresh_token и user_id (УНК)"]])}
+  let main=`<div class="box" id="d-base"><h3>Адрес и версия</h3><dl class="kv"><dt>Тестовый шлюз</dt><dd><code>${a.base}</code></dd><dt>Dev Portal</dt><dd><a href="${a.portal}" target="_blank" rel="noopener">pp-wso2-am.bveb.by/devportal</a> (внутренняя сеть)</dd><dt>Спецификация</dt><dd>${a.ver}, OpenAPI 3.0.1</dd><dt>Стандарты</dt><dd>СПР 6.02-1-2022, СПР 6.01-2020</dd><dt>Формат</dt><dd>JSON, UTF-8; дата и время ISO 8601 с часовым поясом: 2026-10-13T10:43:07+03:00</dd><dt>Поддержка</dt><dd><code>Support_e-bank@st.by</code></dd><dt>Методов</dt><dd>${total}</dd></dl></div>
+  <div class="box" id="d-auth"><h3>Авторизация</h3><p class="note" style="margin-top:0">Доступ через WSO2 API Manager по OAuth 2.0. Пользователь API второго типа передаёт токен в заголовке Authorization. Пользователь API первого типа передаёт в заголовке x-api-key ключ, сгенерированный в СДБО банка. Токен в формате JWT с ограниченным сроком жизни; после истечения запросите новый.</p>
+   <dl class="kv"><dt>Authorization URL</dt><dd><code>${AUTH_URL}</code></dd><dt>Тип</dt><dd>oauth2, implicit flow (по swagger)</dd></dl>
    <pre style="margin-top:12px">${esc(`{
   "access_token": "eyJhbGciOiJIUzI1NiIs…",
   "token_type": "bearer",
@@ -495,11 +799,26 @@ function doc(a,key){
   "owner": "Банк БелВЭБ",
   "jti": "337ca5e0-8995-46a9-8116-07cfac0be61f"
 }`)}</pre></div>
-  <div class="box" id="d-headers"><h3>Общие заголовки</h3>${table(["Заголовок","Описание","Обяз."],[H.auth,H.iid,H.idem.map((x,i)=>i===2?"Для POST":x),H.ct.map((x,i)=>i===2?"Для POST":x),H.adate,H.ip])}</div>
+  <div class="box" id="d-headers"><h3>Общие заголовки</h3>${table(["Заголовок","Описание","Обяз."],[H.auth,H.apikey,H.iid,H.idem,H.ct,H.adate,H.ip,H.ua].concat(a.key==="accounts"?[H.acons]:[["{тип}ConsentId","Для POST и GET платёжного указания: идентификатор согласия, например domesticConsentId","Да"]]))}<p class="note">* Нужен один из двух: Authorization или x-api-key, в зависимости от типа Пользователя API.</p></div>
+  <div class="box" id="d-paging"><h3>Пагинация</h3><p class="note" style="margin-top:0">Списки отдаются постранично. Номер страницы передаётся в параметре <code>page</code>, по умолчанию 1.</p>${table(["Блок","Содержимое"],[["links","self — текущий запрос, first — первая страница, next — следующая"],["meta","totalPages — число страниц; для транзакций также firstAvailableDateTime и lastAvailableDateTime"]])}</div>
   ${a.perms?`<div class="box" id="d-perms"><h3>Разрешения (permissions)</h3>${table(["Разрешение","Ресурсы","Назначение"],a.perms)}</div>`:''}
   <div class="box" id="d-status"><h3>Статусы согласия</h3>${table(["Статус","Значение"],a.statuses)}</div>
-  <div class="box" id="d-err"><h3>Ошибки</h3>${table(["Код","Когда возникает"],[["400 Bad Request","Неверные или отсутствующие параметры, неподходящий статус согласия"],["401 Unauthorized","Токен отсутствует, истёк, или УНК клиента не совпадает с согласием"],["403 Forbidden","У приложения нет нужного разрешения"],["404 Not Found","Согласие, счёт или ресурс не найдены"],["5xx","Ошибка на стороне банка; повторите запрос с тем же x-idempotency-key"]])}</div>`;
-  main+=a.groups.map((g,gi)=>`<section class="group" id="${g.id}"><h2>${g.name}</h2><p>${g.desc}</p>${g.eps.map((e,ei)=>ep(e,key+gi,ei)).join("")}</section>`).join("");
+  ${a.payStatuses?`<div class="box" id="d-paystatus"><h3>Статусы платёжного указания (E065)</h3>${table(["Код","Значение"],a.payStatuses)}<p class="note">Причина отказа или отзыва приходит в statusReasonInformation.statusReasonCode по справочнику E066, например CUST — отзыв по требованию плательщика, DUPL — дубликат, AM09 — неверная сумма, FRAD — подозрение на мошенничество.</p></div>`:''}
+  <div class="box" id="d-err"><h3>Ошибки</h3><p class="note" style="margin-top:0">При ошибке приходит объект OBErrorResponse: code — HTTP-код текстом, id — идентификатор для аудита, message, errors[] с errorCode, message, path и url. На 429 банк присылает заголовок Retry-After с паузой в секундах.</p>
+   ${table(["HTTP","Когда возникает"],[["400 Bad Request","Неверные или отсутствующие параметры"],["401 Unauthorized","Токен или ключ отсутствует либо недействителен"],["403 Forbidden","Нет доступа; BY.NBRB.Reauthenticate — нужна повторная аутентификация"],["404 Not Found","Ресурс не найден"],["405 / 406 / 415","Неподдерживаемый метод, формат ответа или Content-Type"],["429 Too Many Requests","Превышен лимит запросов, см. Retry-After"],["500 Internal Server Error","BY.NBRB.UnexpectedError"]].concat(a.key==="accounts"?[["503 Service Unavailable","Сервис временно недоступен"]]:[]))}
+   <h4 style="margin:16px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Коды errorCode</h4>${table(["errorCode","Значение"],ERR_CODES)}
+   <pre style="margin-top:12px">${esc(`{
+  "code": "400 BadRequest",
+  "id": "2b5f0fb2-730b-11e8-adc0-fa7ae01bbeb",
+  "message": "Невалидные параметры запроса",
+  "errors": [{
+    "errorCode": "BY.NBRB.Field.Missing",
+    "message": "Отсутствует обязательный элемент",
+    "path": "data.permissions"
+  }]
+}`)}</pre></div>
+  <div class="box issues" id="d-issues"><h3>Замечания к спецификации</h3><p class="note" style="margin-top:0">Расхождения в swagger ${a.ver.split(" ·")[0]}, которые стоит исправить до публикации.</p>${table(["Где","Что не так"],a.issues)}</div>`;
+  main+=a.groups.map((g,gi)=>`<section class="group" id="${g.id}"><h2>${g.name}</h2><p>${g.desc}</p>${g.eps.map((e,ei)=>ep(e,`ep-${a.key}-${gi}-${ei}`,a.base)).join("")}</section>`).join("");
   return `<div class="docs"><aside class="toc">${toc}</aside><div style="min-width:0">${main}</div></div>`;
 }
 
@@ -512,7 +831,7 @@ function render(){
   document.getElementById("apiLead").textContent=a.lead;
   document.getElementById("ver").textContent=a.ver;
   const v=document.getElementById("view");
-  v.innerHTML= state.tab==="review"?review(a): state.tab==="guides"?guides(a): doc(a,state.api[0]);
+  v.innerHTML= state.tab==="review"?review(a): state.tab==="guides"?guides(a): doc(a);
 }
 function go(api,tab){state.api=api;state.tab=tab;try{history.replaceState(null,"","#"+api+"-"+tab)}catch(e){};render()}
 document.querySelectorAll("[data-api]").forEach(b=>b.onclick=()=>go(b.dataset.api,state.tab));
