@@ -1,4 +1,3 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>БелВЭБ Open API</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -86,6 +85,7 @@ ol.steps{padding:0;margin:0}
 .dev{display:inline-block;font:600 11px var(--f-body);letter-spacing:.04em;text-transform:uppercase;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn);border-radius:999px;padding:2px 9px;white-space:nowrap}
 .devbar{display:flex;gap:12px;align-items:center;border:1px dashed var(--warn);background:var(--warn-bg);border-radius:10px;padding:14px 18px;margin-top:28px;font-size:14px}
 .tile .dev{float:right;margin-left:8px}
+.dev.ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok)}
 .tile code{font-size:12px}
 .isvc{scroll-margin-top:90px}
 .isvc .head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
@@ -830,31 +830,55 @@ const PAY = {
   issues:[]
 };
 
+const IG="https://pr-gateway-am-new-wso2.belveb.by";
 const INFO_SVC=[
-  {id:"branch",name:"Отделения",obj:"Branch",d:"Пункты обслуживания клиентов банка: отделения и обменные пункты с адресом, временем работы, контактами, геолокацией и перечнем услуг.",eps:["GET /banks/{bankId}/branches","GET /banks/{bankId}/branches/{branchId}","GET /banks/{bankId}/branches/{branchId}/services"]},
-  {id:"atm",name:"Банкоматы и ПСТ",obj:"ATM",d:"Банкоматы и платёжно-справочные терминалы: адрес, режим и статус работы, доступные операции, например приём наличных.",eps:["GET /banks/{bankId}/atms","GET /banks/{bankId}/atms/{ATMId}"]},
-  {id:"exchange",name:"Обмен валют",obj:"CurrencyExchange",d:"Курсы и условия валютно-обменных операций банка, в том числе по направлению обмена.",eps:["GET /banks/{bankId}/exchange"]},
-  {id:"deposit",name:"Депозиты",obj:"Deposit",d:"Условия привлечения денежных средств во вклады: валюта, срок, ставки, капитализация, досрочный отзыв.",eps:["GET /banks/{bankId}/deposit"]},
-  {id:"loan",name:"Кредиты",obj:"Loan",d:"Условия кредитования физических и юридических лиц: категория и тип кредита, валюта, собственные средства, обеспечение.",eps:["GET /banks/{bankId}/loan"]},
-  {id:"card",name:"Банковские платёжные карточки",obj:"Card",d:"Условия выпуска и обслуживания карточек: валюта, платёжная система, тип карточки.",eps:["GET /banks/{bankId}/card"]},
-  {id:"jewel",name:"Драгоценности",obj:"Jewel",d:"Драгоценные металлы в депозиты, реализация драгоценных камней, памятных и инвестиционных монет.",eps:["GET /banks/{bankId}/jewel"]},
-  {id:"transfer",name:"Переводы денежных средств",obj:"Transfer",d:"Условия переводов денежных средств и электронных денег, в том числе по валюте и стране назначения.",eps:["GET /banks/{bankId}/transfer"]}
+  {id:"deposit",name:"Депозиты",obj:"Deposit",st:"new",api:"IOAPI",base:IG+"/open-banking/v1.0/banks/BELBBY2X/v1",eps:["GET /deposit"],d:"Условия привлечения денежных средств во вклады: валюта, срок, ставки, капитализация, досрочный отзыв.",params:null,note:"Сервис IOAPI. Параметры фильтрации в спецификации не описаны: запрос возвращает все условия по депозитам банка."},
+  {id:"loan",name:"Кредиты",obj:"Loan",st:"new",api:"IOAPI",base:IG+"/open-banking/v1.0/banks/BELBBY2X/v1",eps:["GET /loan"],d:"Условия кредитования физических и юридических лиц: категория и тип кредита, валюта, собственные средства, обеспечение.",params:null,note:"Сервис IOAPI. Параметры фильтрации в спецификации не описаны: запрос возвращает все условия кредитования банка."},
+  {id:"jewel",name:"Драгоценные металлы",obj:"Jewel",st:"new",api:"IOAPI",base:IG+"/open-banking/v1.0/banks/BELBBY2X/v1",eps:["GET /jewel"],d:"Условия по обезличенным металлическим счетам: металл, валюта, цены покупки и продажи.",params:null,note:"Сервис IOAPI. Структура сокращена относительно СФУТ 6.03-2024: в блоке <code>jewel</code> возвращаются только обезличенные металлические счета (<code>impersonalMetalAccounts</code>). Драгоценные камни и монеты не передаются.",warn:true},
+  {id:"atm",name:"Банкоматы и ПСТ",obj:"ATM",st:"old",api:"Open Banking ATMs API",base:IG+"/open-banking-atms/v1.0",eps:["GET /banks/BELBBY2X/atms"],d:"Банкоматы и платёжно-справочные терминалы: адрес, геолокация, режим и статус работы, доступные операции и валюты.",
+   params:[["type","Тип устройства"],["town_name","Населённый пункт"],["access_24hours","Круглосуточный доступ, true/false"],["serviceATM_types","Доступные операции, массив"],["current_status","Текущий статус работы"],["latitude","Широта"],["longitude","Долгота"],["currencies","Доступные валюты"],["terminalId","Внешний идентификатор устройства"],["affiliation","Принадлежность устройства"],["soatoCode","Код СОАТО"]],
+   note:"Прежняя версия сервиса (Open Banking API). Все параметры необязательные. В ответе — сведения о банке и массив <code>atm</code>: адрес с геолокацией, тип, операции <code>servicesATM</code>, валюты."},
+  {id:"branch",name:"Отделения",obj:"Branch",st:"old",api:"Open Banking Branches API",base:IG+"/open-banking-branches/v1.0",eps:["GET /banks/BELBBY2X/branches"],d:"Пункты обслуживания клиентов: отделения и обменные пункты с адресом, временем работы, контактами, геолокацией и перечнем услуг.",
+   params:[["addressLine","Адрес отделения"],["serviceTypes","Услуги, которые оказывает отделение, массив"],["access_24hours","Круглосуточный доступ, true/false"],["latitude","Широта"],["longitude","Долгота"],["townName","Населённый пункт"]],
+   note:"Прежняя версия сервиса (Open Banking API). Все параметры необязательные."},
+  {id:"exchange",name:"Курсы валют",obj:"CurrencyExchange",st:"old",api:"Open Banking Currency API",base:IG+"/open-banking-currency/v1.0",eps:["GET /banks/BELBBY2X/exchange?type={type}"],d:"Курсы и условия валютно-обменных операций банка.",
+   params:[["id","Путь: идентификатор банка, BELBBY2X. Обязательный"],["type","Тип курсов. Обязательный"]],
+   note:"Прежняя версия сервиса (Open Banking API). Допустимые значения параметра <code>type</code> в спецификации не перечислены. <span class=\"todo\">⚠ Уточнить значения type</span>"},
+  {id:"card",name:"Банковские платёжные карточки",obj:"Card",st:"dev",d:"Условия выпуска и обслуживания карточек: валюта, платёжная система, тип карточки.",eps:["GET /banks/{bankId}/card"]},
+  {id:"transfer",name:"Переводы денежных средств",obj:"Transfer",st:"dev",d:"Условия переводов денежных средств и электронных денег, в том числе по валюте и стране назначения.",eps:["GET /banks/{bankId}/transfer"]}
 ];
 const DEV='<span class="dev">В разработке</span>';
-const INFO={key:"info",title:"Информационная страница",ver:"Информационные API · СФУТ 6.03-2024 · в разработке",
-  lead:"Открытые информационные API: справочные сведения о банке и его услугах — отделения, банкоматы, обмен валют, депозиты, кредиты, карточки, драгоценности и переводы. 8 сервисов по СФУТ 6.03-2024."};
-function infoBar(t){return `<div class="devbar">${DEV}<span>${t||"Раздел в разработке. Подробное описание сервисов, параметров и примеров появится позже."}</span></div>`}
+const BADGE={new:'<span class="dev ok">Доступен</span>',old:'<span class="dev ok">Доступен · прежняя версия</span>',dev:DEV};
+const INFO={key:"info",title:"Информационная страница",ver:"Информационные API · СФУТ 6.03-2024",
+  lead:"Открытые информационные API: справочные сведения о банке и его услугах — отделения, банкоматы, курсы валют, депозиты, кредиты, драгоценные металлы. Данные общедоступны: регистрация приложения, токены и согласия не нужны."};
+function infoBar(t){return `<div class="devbar">${DEV}<span>${t}</span></div>`}
+const NOAUTH=`<div class="box contact"><h3>Без регистрации и согласий</h3><p>Информационные API отдают общедоступные сведения о банке. Регистрировать приложение, получать токен и согласие клиента не нужно: достаточно отправить GET-запрос на адрес сервиса.</p></div>`;
 function infoReview(a){
-  return infoBar()+`<h2>Сервисы</h2><div class="grid4">${INFO_SVC.map(v=>`<div class="tile">${DEV}<span class="k">${v.obj}</span><h3>${v.name}</h3><p>${v.d}</p></div>`).join("")}</div>
-  <h2>Как начать</h2><div class="box"><p class="note" style="margin:0">Порядок подключения к информационным API будет описан позже. ${DEV}</p></div>`;
+  return NOAUTH+`<h2>Сервисы</h2><div class="grid4">${INFO_SVC.map(v=>`<div class="tile">${BADGE[v.st]}<span class="k">${v.obj}</span><h3>${v.name}</h3><p>${v.d}</p></div>`).join("")}</div>
+  <h2>Как начать</h2><ol class="steps"><li><h3>Выберите сервис</h3><p>Отделения, банкоматы, курсы валют, депозиты, кредиты или драгоценные металлы</p></li><li><h3>Отправьте GET-запрос</h3><p>Без заголовка Authorization и без регистрации</p></li><li><h3>Отфильтруйте данные</h3><p>Используйте параметры запроса, например город или круглосуточный доступ</p></li><li><h3>Покажите клиенту</h3><p>Ответ приходит в JSON, UTF-8</p></li></ol>`;
 }
 function infoGuides(a){
-  return infoBar("Гайд по подключению к информационным API в разработке.")+`<h2>Что будет в гайде</h2><div class="flow">${["Регистрация и подписка на информационные API","Ключи и токен приложения","Получение данных по сервисам","Тестирование","Помощь банка"].map((t,i)=>fs(i+1,`${t} ${DEV}`,`<p>Описание появится позже.</p>`)).join("")}</div>`;
+  const live=INFO_SVC.filter(v=>v.st!=="dev");
+  return NOAUTH+`<h2>Как получить данные</h2><div class="flow">
+   ${fs(1,"Выберите сервис и адрес",`<p>Адреса промышленной среды:</p>${`<div class="tbl"><table><thead><tr><th>Сервис</th><th>Запрос</th></tr></thead><tbody>${live.map(v=>`<tr><td>${v.name}</td><td><code>GET ${esc(v.base+v.eps[0].split(" ")[1])}</code></td></tr>`).join("")}</tbody></table></div>`}`)}
+   ${fs(2,"Отправьте запрос",`<p>Заголовок Authorization не нужен. Пример запроса банкоматов, работающих круглосуточно:</p><pre>${esc(`curl "${IG}/open-banking-atms/v1.0/banks/BELBBY2X/atms?access_24hours=true"`)}</pre>`)}
+   ${fs(3,"Используйте фильтры",`<p>Сервисы банкоматов и отделений принимают необязательные параметры: населённый пункт, круглосуточный доступ, координаты, виды услуг. Для курсов валют обязателен параметр <code>type</code>. Полный перечень — во вкладке «Документация».</p>`)}
+   ${fs(4,"Обработайте ответ",`<p>Ответ приходит в JSON, UTF-8. В нём есть сведения о банке (BIC <code>BELBBY2X</code>, адрес) и массив объектов сервиса.</p>`)}
+  </div>
+  <div class="box contact" id="g-help"><h3>Помощь банка</h3><p>Если сервис недоступен или данные выглядят неверно, обратитесь в банк. ${HELP_CONTACT}</p></div>`;
 }
 function infoDoc(a){
   const toc=`<b>Начало работы</b><a href="#i-base">Общие сведения</a><b>Сервисы</b>${INFO_SVC.map(v=>`<a href="#i-${v.id}">${v.name}</a>`).join("")}`;
-  let main=infoBar("Документация в разработке: методы, параметры и примеры ответов будут добавлены.")+`<div class="box" id="i-base" style="margin-top:16px"><h3>Общие сведения</h3><dl class="kv"><dt>Стандарт</dt><dd>СФУТ 6.03-2024 «Открытые банковские API. Информационные API. Спецификация», применяется совместно с СПР 6.01-2020</dd><dt>Формат</dt><dd>JSON, UTF-8</dd><dt>Адрес API</dt><dd>${DEV}</dd><dt>Авторизация</dt><dd>${DEV}</dd><dt>Сервисов</dt><dd>${INFO_SVC.length}</dd></dl><p class="note">Базовый набор методов рекомендован стандартом и не является исчерпывающим. Также предусмотрен общий запрос по всем услугам банка <code>GET /banks/{bankId}/services</code>.</p></div>`;
-  main+=INFO_SVC.map(v=>`<section class="group isvc" id="i-${v.id}"><div class="head"><h2>${v.name}</h2>${DEV}</div><p>${v.d}</p><div class="box"><h4 style="margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Основные методы по СФУТ</h4><div class="call">${v.eps.map(e=>{const [m,pth]=e.split(" ");return `<span class="chip"><span class="m ${m}" style="padding:2px 6px">${m}</span>${esc(pth)}</span>`}).join("")}</div><p class="note">Объект данных: <code>${v.obj}</code>. Параметры, фильтры и примеры ответов будут добавлены.</p></div></section>`).join("");
+  let main=`<div class="box" id="i-base"><h3>Общие сведения</h3><dl class="kv"><dt>Стандарт</dt><dd>СФУТ 6.03-2024 «Открытые банковские API. Информационные API. Спецификация», применяется совместно с СПР 6.01-2020</dd><dt>Шлюз</dt><dd><code>${IG}</code></dd><dt>Портал</dt><dd><a href="https://pr-am-new-wso2.belveb.by/devportal/apis" target="_blank" rel="noopener">pr-am-new-wso2.belveb.by/devportal</a></dd><dt>Авторизация</dt><dd>Не требуется</dd><dt>Метод</dt><dd>GET</dd><dt>Формат</dt><dd>JSON, UTF-8</dd><dt>Идентификатор банка</dt><dd><code>BELBBY2X</code></dd></dl><p class="note">Депозиты, кредиты и драгоценные металлы — новый сервис IOAPI. Банкоматы, отделения и курсы валют — прежние сервисы Open Banking API; их структура может отличаться от СФУТ.</p></div>`;
+  main+=INFO_SVC.map(v=>{
+    if(v.st==="dev") return `<section class="group isvc" id="i-${v.id}"><div class="head"><h2>${v.name}</h2>${DEV}</div><p>${v.d}</p><div class="box"><p class="note" style="margin:0">Сервис в разработке. Метод по СФУТ: <code>${esc(v.eps[0])}</code>.</p></div></section>`;
+    const line=`GET ${v.base}${v.eps[0].split(" ")[1]}`;
+    return `<section class="group isvc" id="i-${v.id}"><div class="head"><h2>${v.name}</h2>${BADGE[v.st]}</div><p>${v.d}</p><div class="box">
+     <dl class="kv"><dt>Сервис WSO2</dt><dd>${v.api}</dd><dt>Объект СФУТ</dt><dd><code>${v.obj}</code></dd></dl>
+     <h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Строка запроса</h4><div class="req"><span>${esc(line)}</span><button class="copy" type="button" data-copy="${esc(line)}">Копировать</button></div>
+     ${v.params?`<h4 style="margin:14px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Параметры</h4>${table(["Параметр","Описание"],v.params)}`:""}
+     <p class="note"${v.warn?' style="color:var(--warn)"':''}>${v.note}</p></div></section>`;
+  }).join("");
   return `<div class="docs"><aside class="toc">${toc}</aside><div style="min-width:0">${main}</div></div>`;
 }
 const APIS={accounts:ACC,payments:PAY,info:INFO};
@@ -876,6 +900,7 @@ const HELP_CONTACT='<span class="todo">⚠ Контакты банка для о
 const DP="https://pr-wso2-am.bveb.by/devportal";
 const ui=t=>`<span class="ui">${t}</span>`;
 const chips=list=>`<div class="call">${list.map(c=>`<span class="chip"><span class="m ${c[0]}" style="padding:2px 6px">${c[0]}</span>${esc(c[1])}</span>`).join("")}</div>`;
+const helpLine=t=>`<div class="help">💬 ${t||"Не получается? Банк поможет — см. «Помощь банка» ниже."}</div>`;
 function fs(n,title,body){return `<div class="fstep"><div class="n">${n}</div><div><h3>${title}</h3>${body}</div></div>`}
 function accountsGuide(a){
   const nav=`<nav class="gnav" aria-label="Разделы гайда"><a href="#g-before">Перед началом</a><a href="#g-reg">Регистрация и подписка</a><a href="#g-keys">Ключи и токен</a><a href="#g-flow">Сценарий получения данных</a><a href="#g-test">Тестирование</a><a href="#g-sec">Безопасность</a><a href="#g-help">Помощь банка</a></nav>`;
@@ -1028,4 +1053,3 @@ if(m){state.api=m[1];state.tab=m[2]}
 render();
 </script>
 
-</body></html>
