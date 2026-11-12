@@ -82,6 +82,13 @@ ol.steps{padding:0;margin:0}
 .help{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--accent);margin-top:10px}
 .cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
 .cols2 .box{margin-bottom:0}
+/* info (in development) */
+.dev{display:inline-block;font:600 11px var(--f-body);letter-spacing:.04em;text-transform:uppercase;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn);border-radius:999px;padding:2px 9px;white-space:nowrap}
+.devbar{display:flex;gap:12px;align-items:center;border:1px dashed var(--warn);background:var(--warn-bg);border-radius:10px;padding:14px 18px;margin-top:28px;font-size:14px}
+.tile .dev{float:right;margin-left:8px}
+.tile code{font-size:12px}
+.isvc{scroll-margin-top:90px}
+.isvc .head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
 /* docs */
 .docs{display:grid;grid-template-columns:250px minmax(0,1fr);gap:32px;align-items:start}
 .toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px);max-height:calc(100vh - 100px);overflow:auto;font-size:14px;border-right:1px solid var(--line);padding-right:16px}
@@ -160,6 +167,7 @@ footer{border-top:1px solid var(--line);color:var(--muted);font-size:13px;paddin
   <div class="apibar" role="group" aria-label="Выбор API">
     <button type="button" id="api-accounts" data-api="accounts">Счета</button>
     <button type="button" id="api-payments" data-api="payments">Платежи</button>
+    <button type="button" id="api-info" data-api="info">Информационная страница</button>
     <span class="ver" id="ver"></span>
   </div>
   <h1 id="apiTitle"></h1>
@@ -822,11 +830,39 @@ const PAY = {
   issues:[]
 };
 
-const APIS={accounts:ACC,payments:PAY};
+const INFO_SVC=[
+  {id:"branch",name:"Отделения",obj:"Branch",d:"Пункты обслуживания клиентов банка: отделения и обменные пункты с адресом, временем работы, контактами, геолокацией и перечнем услуг.",eps:["GET /banks/{bankId}/branches","GET /banks/{bankId}/branches/{branchId}","GET /banks/{bankId}/branches/{branchId}/services"]},
+  {id:"atm",name:"Банкоматы и ПСТ",obj:"ATM",d:"Банкоматы и платёжно-справочные терминалы: адрес, режим и статус работы, доступные операции, например приём наличных.",eps:["GET /banks/{bankId}/atms","GET /banks/{bankId}/atms/{ATMId}"]},
+  {id:"exchange",name:"Обмен валют",obj:"CurrencyExchange",d:"Курсы и условия валютно-обменных операций банка, в том числе по направлению обмена.",eps:["GET /banks/{bankId}/exchange"]},
+  {id:"deposit",name:"Депозиты",obj:"Deposit",d:"Условия привлечения денежных средств во вклады: валюта, срок, ставки, капитализация, досрочный отзыв.",eps:["GET /banks/{bankId}/deposit"]},
+  {id:"loan",name:"Кредиты",obj:"Loan",d:"Условия кредитования физических и юридических лиц: категория и тип кредита, валюта, собственные средства, обеспечение.",eps:["GET /banks/{bankId}/loan"]},
+  {id:"card",name:"Банковские платёжные карточки",obj:"Card",d:"Условия выпуска и обслуживания карточек: валюта, платёжная система, тип карточки.",eps:["GET /banks/{bankId}/card"]},
+  {id:"jewel",name:"Драгоценности",obj:"Jewel",d:"Драгоценные металлы в депозиты, реализация драгоценных камней, памятных и инвестиционных монет.",eps:["GET /banks/{bankId}/jewel"]},
+  {id:"transfer",name:"Переводы денежных средств",obj:"Transfer",d:"Условия переводов денежных средств и электронных денег, в том числе по валюте и стране назначения.",eps:["GET /banks/{bankId}/transfer"]}
+];
+const DEV='<span class="dev">В разработке</span>';
+const INFO={key:"info",title:"Информационная страница",ver:"Информационные API · СФУТ 6.03-2024 · в разработке",
+  lead:"Открытые информационные API: справочные сведения о банке и его услугах — отделения, банкоматы, обмен валют, депозиты, кредиты, карточки, драгоценности и переводы. 8 сервисов по СФУТ 6.03-2024."};
+function infoBar(t){return `<div class="devbar">${DEV}<span>${t||"Раздел в разработке. Подробное описание сервисов, параметров и примеров появится позже."}</span></div>`}
+function infoReview(a){
+  return infoBar()+`<h2>Сервисы</h2><div class="grid4">${INFO_SVC.map(v=>`<div class="tile">${DEV}<span class="k">${v.obj}</span><h3>${v.name}</h3><p>${v.d}</p></div>`).join("")}</div>
+  <h2>Как начать</h2><div class="box"><p class="note" style="margin:0">Порядок подключения к информационным API будет описан позже. ${DEV}</p></div>`;
+}
+function infoGuides(a){
+  return infoBar("Гайд по подключению к информационным API в разработке.")+`<h2>Что будет в гайде</h2><div class="flow">${["Регистрация и подписка на информационные API","Ключи и токен приложения","Получение данных по сервисам","Тестирование","Помощь банка"].map((t,i)=>fs(i+1,`${t} ${DEV}`,`<p>Описание появится позже.</p>`)).join("")}</div>`;
+}
+function infoDoc(a){
+  const toc=`<b>Начало работы</b><a href="#i-base">Общие сведения</a><b>Сервисы</b>${INFO_SVC.map(v=>`<a href="#i-${v.id}">${v.name}</a>`).join("")}`;
+  let main=infoBar("Документация в разработке: методы, параметры и примеры ответов будут добавлены.")+`<div class="box" id="i-base" style="margin-top:16px"><h3>Общие сведения</h3><dl class="kv"><dt>Стандарт</dt><dd>СФУТ 6.03-2024 «Открытые банковские API. Информационные API. Спецификация», применяется совместно с СПР 6.01-2020</dd><dt>Формат</dt><dd>JSON, UTF-8</dd><dt>Адрес API</dt><dd>${DEV}</dd><dt>Авторизация</dt><dd>${DEV}</dd><dt>Сервисов</dt><dd>${INFO_SVC.length}</dd></dl><p class="note">Базовый набор методов рекомендован стандартом и не является исчерпывающим. Также предусмотрен общий запрос по всем услугам банка <code>GET /banks/{bankId}/services</code>.</p></div>`;
+  main+=INFO_SVC.map(v=>`<section class="group isvc" id="i-${v.id}"><div class="head"><h2>${v.name}</h2>${DEV}</div><p>${v.d}</p><div class="box"><h4 style="margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Основные методы по СФУТ</h4><div class="call">${v.eps.map(e=>{const [m,pth]=e.split(" ");return `<span class="chip"><span class="m ${m}" style="padding:2px 6px">${m}</span>${esc(pth)}</span>`}).join("")}</div><p class="note">Объект данных: <code>${v.obj}</code>. Параметры, фильтры и примеры ответов будут добавлены.</p></div></section>`).join("");
+  return `<div class="docs"><aside class="toc">${toc}</aside><div style="min-width:0">${main}</div></div>`;
+}
+const APIS={accounts:ACC,payments:PAY,info:INFO};
 const esc=s=>String(s).replace(/&(?!lt;|gt;)/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 const table=(head,rows)=>`<div class="tbl"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td>${i===0?`<code>${esc(c)}</code>`:c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 
 function review(a){
+  if(a.key==="info") return infoReview(a);
   return `<h2>Возможности</h2><div class="grid4">${a.features.map(f=>`<div class="tile"><span class="k">${f[0]}</span><h3>${f[1]}</h3><p>${f[2]}</p></div>`).join("")}</div>
   <h2>Примеры использования API ${a.title}</h2><div class="grid4">${a.cases.map(c=>`<div class="tile"><h3>${c[0]}</h3><p>${c[1]}</p></div>`).join("")}</div>
   <h2>Как начать</h2><ol class="steps">
@@ -874,8 +910,44 @@ function accountsGuide(a){
   const help=`<div class="box contact" id="g-help"><h3>Помощь банка</h3><p>Подключение рассчитано на самостоятельную работу, но вы всегда можете обратиться в банк за помощью, например:</p><ul><li>не удаётся зарегистрироваться или войти на портал разработчика;</li><li>не получается оформить подписку или сгенерировать ключи и токен;</li><li>нужно активировать приложение после первого согласия;</li><li>запросы возвращают непонятные ошибки;</li><li>учётные данные скомпрометированы.</li></ul><p>${HELP_CONTACT}</p></div>`;
   return intro+nav+before+reg+keys+flow+test+sec+help;
 }
+function paymentsGuide(a){
+  const nav=`<nav class="gnav" aria-label="Разделы гайда"><a href="#g-before">Перед началом</a><a href="#g-reg">Регистрация и подписка</a><a href="#g-keys">Ключи и токен</a><a href="#g-flow">Сценарий инициирования платежа</a><a href="#g-test">Тестирование</a><a href="#g-sec">Безопасность</a><a href="#g-help">Помощь банка</a></nav>`;
+  const intro=`<div class="box contact" id="g-connect"><h3>Самостоятельное подключение к API ${a.title}</h3><p>Вы подключаете своё приложение сами на портале разработчика банка: регистрируетесь, создаёте приложение, оформляете подписку на API <code>Payments_bveb</code> и генерируете ключи. Обращаться в банк для этого не нужно.</p><p>Если на любом шаге что-то не получается, банк поможет с регистрацией, подпиской, ключами и активацией приложения. ${HELP_CONTACT}</p></div>`;
+  const before=`<h2 id="g-before">Перед началом</h2><div class="cols2">
+   <div class="box"><h3>Что понадобится</h3><ul><li>Юридическое лицо — Пользователь API, которое предоставляет клиентам банка услугу через своё приложение</li><li>Адрес страницы приложения (Callback URL), куда банк вернёт клиента после подтверждения согласия</li><li>Компьютер с Windows 10 или 11, 4 Гб памяти (рекомендуется 8 Гб) и современный браузер: Chrome, Firefox, Edge, Opera</li></ul><p class="note">Если вы уже подключены к API Счета, используйте то же приложение: достаточно добавить подписку на <code>Payments_bveb</code> (шаг 4).</p></div>
+   <div class="box"><h3>Правила вызова API</h3><dl class="kv"><dt>Архитектура</dt><dd>RESTful</dd><dt>Протокол</dt><dd>только HTTPS, TLS 1.2+</dd><dt>Формат</dt><dd>application/json, UTF-8</dd><dt>Таймауты</dt><dd>соединение — 30 с, ожидание ответа — 250 с</dd><dt>Стандарт</dt><dd>СПР 6.02-1-2022</dd></dl></div></div>`;
+  const reg=`<h2 id="g-reg">Регистрация и подписка</h2><div class="flow">
+   ${fs(1,"Зарегистрируйтесь на портале разработчика",`<p>Откройте портал <a href="${DP}/apis" target="_blank" rel="noopener">pr-wso2-am.bveb.by/devportal</a> и нажмите ${ui("Sign In")} → ${ui("Create Account")}. Задайте имя пользователя, нажмите ${ui("Proceed to Self Register")}, заполните обязательные поля формы Create New Account и нажмите ${ui("Register")}.</p>`)}
+   ${fs(2,"Войдите на портал",`<p>После успешной регистрации нажмите ${ui("Continue")} и войдите с созданными именем пользователя и паролем.</p>`)}
+   ${fs(3,"Создайте приложение",`<p>Перейдите в раздел ${ui("Applications")}, нажмите ${ui("ADD NEW APPLICATION")}, укажите название приложения и нажмите ${ui("Save")}. Приложение появится в списке раздела Applications.</p>`)}
+   ${fs(4,"Подпишитесь на API Платежи",`<p>Откройте приложение, раздел ${ui("Subscriptions")}, и нажмите ${ui("SUBSCRIBE APIS")}. Найдите в списке или через поиск API <code>Payments_bveb</code> и нажмите ${ui("SUBSCRIBE")}.</p><p>Если вашему приложению нужны и данные по счетам клиента, так же подпишитесь на <code>Accounts_bveb</code>.</p>`)}
+  </div>`;
+  const keys=`<h2 id="g-keys">Ключи и токен приложения</h2><div class="flow">
+   ${fs(5,"Сгенерируйте ключи",`<p>В разделе ${ui("Applications")} выберите приложение и откройте ${ui("Production Keys")} → вкладка ${ui("BVEB")}.</p><ul><li>В поле Grant Types отметьте <code>Code</code>, <code>Refresh Token</code> и <code>Client Credentials</code></li><li>В поле Callback URL укажите адрес страницы вашего приложения, куда клиент вернётся после входа в банк</li></ul><p>Нажмите ${ui("GENERATE KEYS")}: портал выдаст Consumer Key и Consumer Secret. Храните Consumer Secret в защищённом хранилище и не передавайте третьим лицам. Если ключи уже сгенерированы для API Счета, повторно делать это не нужно.</p>`)}
+   ${fs(6,"Получите токен приложения",`<p>Нажмите ${ui("CURL TO GENERATE ACCESS TOKEN")}. В открывшемся окне скопируйте команду для client credentials flow — только кнопкой копирования, чтобы не потерять символы. Выполните её в командной строке (<span class="ui">Win</span> + <span class="ui">R</span> → <code>cmd</code>): в ответе придёт <code>access_token</code> приложения.</p><p>Токен передаётся во всех запросах в заголовке:</p><pre>Authorization: Bearer &lt;access_token&gt;</pre><p class="note">Авторизация построена на OAuth 2.0 и OpenID Connect с профилем безопасности FAPI. Токен приложения подтверждает, что запрос отправляет ваше приложение; для создания платежа нужен ещё токен клиента — шаг 9.</p>`)}
+  </div>`;
+  const types=`<div class="tbl"><table><thead><tr><th>Вид платежа</th><th>Согласие</th><th>Платёжное указание</th></tr></thead><tbody>${[["Платёж за товары, работы, услуги","domestic"],["Платёж в бюджет","domesticTax"],["Список бенефициаров со счетами","listAccounts"],["Список бенефициаров, перевод без открытия счёта","listPassports"]].map(r=>`<tr><td>${r[0]}</td><td><code>POST /paymentConsents/${r[1]}</code></td><td><code>POST /payments/${r[1]}</code></td></tr>`).join("")}</tbody></table></div>`;
+  const flow=`<h2 id="g-flow">Сценарий инициирования платежа</h2><p class="note" style="margin-top:-6px">Клиент находится в вашем приложении и хочет оплатить товар, услугу или налог. Банк примет платёж только по согласию, которое клиент подтвердит на стороне банка. Согласие краткосрочное: одно согласие — один платёж.</p><div class="flow">
+   ${fs(7,"Создайте согласие на платёж",`<p>С токеном приложения отправьте запрос на создание согласия. Ресурс выбирается по виду платежа:</p>${types}<p>Параметры платежа передаются в блоке <code>initiation</code>, для платежа за товары и услуги — также в блоке <code>risk</code>. Банк создаст согласие в статусе <code>AwaitingAuthorisation</code> и вернёт его идентификатор и ссылку <code>link</code>. Если банк не может обработать запрос, согласие будет отклонено.</p><p class="note">Методы <code>requirement</code>, <code>taxRequirement</code>, <code>VRP</code> и сводные запросы по всем согласиям и указаниям описаны во вкладке «Документация».</p>`)}
+   ${fs(8,"Перенаправьте клиента в банк",`<p>Откройте клиенту ссылку из поля <code>link</code>. Клиент входит на странице банка с логином и паролем интернет-банка, видит параметры платежа и подтверждает согласие. Согласие переходит в статус <code>Authorised</code>, а клиент возвращается в ваше приложение по Callback URL.</p><div class="callout"><b>Важно при первом подключении.</b> Когда вы впервые создадите согласие после регистрации приложения, по ссылке <code>link</code> откроется сообщение о необходимости обратиться в банк. Это ожидаемо: позвоните в банк, и специалист активирует ваше приложение. После этого повторите шаг. ${HELP_CONTACT}</div>${chips([["GET","/paymentConsents/domestic/{domesticConsentId}"]])}`)}
+   ${fs(9,"Получите токен клиента",`<p>После подтверждения банк перенаправит клиента на ваш Callback URL с кодом авторизации:</p><pre>${esc("https://YOUR_APP/callback?code=AUTHORIZATION_CODE&state=xyzABC123")}</pre><p>Обменяйте код на токен клиента запросом POST к серверу авторизации банка с заголовком <code>Content-Type: application/x-www-form-urlencoded</code>:</p>${table(["Параметр","Описание"],[["grant_type","authorization_code"],["redirect_uri","Ваш Callback URL"],["client_id","Идентификатор приложения"],["client_secret","Секретный ключ приложения"],["code","Код авторизации из адреса возврата"]])}<p>В ответе придут <code>access_token</code>, <code>token_type</code> (Bearer) и <code>expires_in</code> — срок жизни токена в секундах.</p>`)}
+   ${fs(10,"Создайте платёжное указание",`<p>С токеном клиента отправьте платёжное указание того же вида, что и согласие. Передайте идентификатор согласия в теле и в заголовке, например <code>domesticConsentId</code>. Банк проверит согласие, создаст платёж в интернет-банке и вернёт результат.</p><div class="callout"><b>Блоки initiation и risk должны полностью совпадать с согласием.</b> При любом расхождении банк вернёт ошибку 400 Bad Request.</div>${chips([["POST","/payments/domestic"]])}`)}
+   ${fs(11,"Клиент подписывает платёж в интернет-банке",`<p>Чтобы платёж был исполнен, клиент подписывает и отправляет его в интернет-банке для юридических лиц. Сообщите клиенту об этом в интерфейсе вашего приложения.</p>`)}
+   ${fs(12,"Отслеживайте статус платежа",`<p>Проверяйте статус указания по его идентификатору: от <code>ACTC</code> (проверки пройдены) до <code>ACSC</code> (списано) или <code>RJCT</code> (отклонено). Полный справочник статусов — во вкладке «Документация».</p><p class="note">Согласие на один платёж краткосрочное: после авторизации клиент не может его отозвать. Метод отзыва платёжного указания (<code>DELETE</code>) находится в разработке.</p>${chips([["GET","/payments/domestic/{domesticId}"]])}`)}
+  </div>`;
+  const test=`<h2 id="g-test">Тестирование</h2><div class="cols2">
+   <div class="box"><h3>В консоли портала</h3><ul><li>Откройте ${ui("APIs")} → <code>Payments_bveb</code> → ${ui("Try out")}</li><li>Вставьте Bearer-токен приложения</li><li>Выберите метод, например <code>POST /paymentConsents/domestic</code>, заполните обязательные заголовки и тело запроса</li><li>Нажмите ${ui("Execute")}: портал покажет ответ и команду curl, которую можно повторить в любой программе</li></ul><p class="note">Обязательные параметры заполняются по СПР 6.02-1-2022 и спецификации. Спецификация и сопроводительные материалы — в разделе ${ui("Documents")} на портале.</p></div>
+   <div class="box"><h3>В Postman</h3><ul><li>Скачайте коллекцию запросов на портале разработчика</li><li>Импортируйте её в Postman: появятся все запросы API</li><li>Начните с запроса на создание согласия на платёж, затем повторите сценарий шагов 7–12</li></ul><p class="note">В разделе ${ui("Applications")} видно список приложений, лимит запросов, статус и подписки; в ${ui("Subscriptions")} — оформленные подписки приложения.</p></div></div>`;
+  const sec=`<h2 id="g-sec">Требования безопасности</h2><div class="cols2">
+   <div class="box"><h3>Учётные данные</h3><ul><li>Используйте только HTTPS</li><li>Храните client_secret в защищённом хранилище</li><li>Не передавайте токены третьим лицам</li><li>Регулярно меняйте ключи</li><li>Немедленно сообщайте банку о компрометации</li><li>При обработке персональных данных соблюдайте законодательство Республики Беларусь и договор с банком</li></ul></div>
+   <div class="box"><h3>Журналирование</h3><ul><li>Записывайте все запросы и ответы</li><li>Храните журналы не менее 30 календарных дней</li><li>Обеспечьте неизменность журналов</li></ul><h3 style="margin-top:16px">Приостановка доступа</h3><p class="note" style="margin:0">Банк вправе временно приостановить доступ при подозрительной активности, нарушении требований безопасности или компрометации учётных данных.</p></div></div>`;
+  const help=`<div class="box contact" id="g-help"><h3>Помощь банка</h3><p>Подключение рассчитано на самостоятельную работу, но вы всегда можете обратиться в банк за помощью, например:</p><ul><li>не удаётся зарегистрироваться или войти на портал разработчика;</li><li>не получается оформить подписку или сгенерировать ключи и токен;</li><li>нужно активировать приложение после первого согласия;</li><li>согласие или платёжное указание отклоняется, запросы возвращают непонятные ошибки;</li><li>учётные данные скомпрометированы.</li></ul><p>${HELP_CONTACT}</p></div>`;
+  return intro+nav+before+reg+keys+flow+test+sec+help;
+}
 function guides(a){
   if(a.key==="accounts") return accountsGuide(a);
+  if(a.key==="payments") return paymentsGuide(a);
+  if(a.key==="info") return infoGuides(a);
   return `<div class="box contact" id="g-connect"><h3>Подключение приложения к финансовым Open API</h3><p>Подключение выполняет банк. Самостоятельная регистрация приложения на портале не предусмотрена: по вашему обращению специалисты банка регистрируют приложение в SSO банка, подключают его к API ${a.title} и передают учётные данные для доступа.</p><p>По всем вопросам подключения обращайтесь в банк: <span class="todo">⚠ Адрес поддержки: перед размещением на проде уточнить актуальный почтовый адрес</span></p></div><h2>Сценарий интеграции</h2><div class="flow">${a.guide.map((g,i)=>`<div class="fstep"><div class="n">${i+1}</div><div><h3>${g[0]}</h3><p>${g[1]}</p><div class="call">${g[2].map(c=>`<span class="chip"><span class="m ${c[0]}" style="padding:2px 6px">${c[0]}</span>${esc(c[1])}</span>`).join("")}</div></div></div>`).join("")}</div>`;
 }
 function ep(e,id,base){
@@ -901,6 +973,7 @@ const FMT_ACC=FMT_COMMON.concat([["date: expirationDate, transactionFromDate/ToD
 const FMT_PAY=FMT_COMMON.concat([["date: requestedExecutionDate, expected…Date, from/toPaymentDate, contractDate, issueDate","date","2026-10-14"],["date-time: creationDateTime, statusUpdateDateTime, cutOffDateTime, competitionDateTime","date-time","2026-10-14T14:00:00.000Z"],["fromCreationDate, toCreationDate (query)","строка по шаблону YYYY-MM-DD","2026-10-01"],["periodStart, periodEnd","date, всегда первое число месяца","2026-09-01"],["taxRemittance.year","date, указывается как дата","2026-01-01"],["amount","до 13 цифр и до 2 знаков после точки","2800.00"],["endToEndIdentification","NN.YYYYMMDD.номер[.N]","01.20261013.693.1"],["Документ получателя (identification)","NN.YYYYMMDD.серия и номер","06.20150901.MP0000000"],["proprietaryPurpose","[0-1][A-Z0-9]{5}.[0-9]{2}","130110.22"],["taxIdentification","[A-Z]{3}[A-Z0-9]{9}","INN191767195"],["iban в listAccounts","[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{4}[A-Z0-9]{16}","BY00BELB30140000000000000000"]]);
 const ERR_CODES=[["BY.NBRB.Field.Missing / Field.Invalid / Field.InvalidDate / Field.Expected","Нет обязательного поля, неверное значение или дата, не передана пара ключ-значение; путь к полю — в path"],["BY.NBRB.Header.Missing / Header.Invalid","Нет обязательного заголовка или он неверный"],["BY.NBRB.Resource.InvalidFormat","Тело запроса не соответствует схеме метода"],["BY.NBRB.Resource.NotFound","Ресурс с таким идентификатором не существует"],["BY.NBRB.Resource.NotCreated","Ресурс ещё формируется (выписка, перечень транзакций); повторите запрос позже"],["BY.NBRB.Resource.InvalidConsentStatus","Согласие в статусе, который не позволяет выполнить запрос"],["BY.NBRB.Resource.ConsentMismatch","Платёжное указание не совпадает с согласием в initiation или risk"],["BY.NBRB.Resource.NotCancel","Ресурс нельзя отозвать"],["BY.NBRB.Rules.AfterCutOffDateTime","Запрос после cutOffDateTime"],["BY.NBRB.Signature.*","Ошибки подписи x-jws-signature: Missing, Malformed, Invalid, InvalidClaim, MissingClaim"],["BY.NBRB.Unsupported.AccountIdentifier / LocalInstrument","Схема идентификации счёта или localInstrument не поддерживаются"],["BY.NBRB.Reauthenticate","403: нужна повторная аутентификация клиента"],["BY.NBRB.UnexpectedError","500: непредвиденная ошибка на стороне банка"]];
 function doc(a){
+  if(a.key==="info") return infoDoc(a);
   const extra = a.payStatuses ? '<a href="#d-paystatus">Статусы платёжного указания</a>' : '';
   const toc=`<b>Начало работы</b><a href="#d-base">Адрес и версия</a><a href="#d-auth">Авторизация</a><a href="#d-headers">Общие заголовки</a><a href="#d-formats">Форматы данных</a><a href="#d-paging">Пагинация</a>${a.perms?'<a href="#d-perms">Разрешения</a>':''}<a href="#d-status">Статусы согласия</a>${extra}<a href="#d-err">Ошибки</a><b>Методы</b>${a.groups.map(g=>`<a href="#${g.id}">${g.name}</a>`).join("")}`;
   const total=a.groups.reduce((n,g)=>n+g.eps.length,0);
@@ -950,7 +1023,7 @@ document.getElementById("view").addEventListener("click",e=>{
   try{navigator.clipboard.writeText(t).then(done,()=>{sel(c)})}catch(_){sel(c)}
 });
 function sel(c){const s=c.previousElementSibling;const r=document.createRange();r.selectNodeContents(s);const w=getSelection();w.removeAllRanges();w.addRange(r)}
-const m=(location.hash||"").slice(1).match(/^(accounts|payments)-(review|guides|doc)$/);
+const m=(location.hash||"").slice(1).match(/^(accounts|payments|info)-(review|guides|doc)$/);
 if(m){state.api=m[1];state.tab=m[2]}
 render();
 </script>
